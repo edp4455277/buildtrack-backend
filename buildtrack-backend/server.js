@@ -6,6 +6,8 @@ require('dotenv').config();
 const projectRoutes = require('./routes/projects');
 const expenseRoutes = require('./routes/expenses');
 const supplierRoutes = require('./routes/suppliers');
+const equipmentRoutes = require('./routes/equipment');
+const reportRoutes = require('./routes/reports');
 const v1Routes = require('./routes/v1');
 const db = require('./config/db');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
@@ -19,10 +21,12 @@ app.use(cors({
 app.use(express.json());
 
 // API Routes
-app.use('/api', v1Routes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/expenses', expenseRoutes);
 app.use('/api/suppliers', supplierRoutes);
+app.use('/api/equipment', equipmentRoutes);
+app.use('/api/reports', reportRoutes);
+app.use('/api', v1Routes);
 app.use('/api/v1', v1Routes);
 
 // Health Check Route

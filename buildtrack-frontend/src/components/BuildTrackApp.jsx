@@ -3,6 +3,14 @@ import {
   Building2, FileText, LayoutGrid, Pencil, Plus, Receipt, Trash2, Truck, Users, Wrench, X,
 } from 'lucide-react';
 import { api, apiError, recordValue } from '../api';
+import {
+  getEquipment,
+  getExpenses,
+  getExpenditureReport,
+  getProjects,
+  getSupplierBalancesReport,
+  getSuppliers,
+} from '../services/api';
 
 const resources = {
   projects: { label: 'Projects', icon: Building2, endpoint: '/projects', title: 'Projects Directory', fields: [
@@ -42,6 +50,20 @@ const resources = {
 
 const initialForms = Object.fromEntries(Object.entries(resources).map(([key, resource]) => [key, Object.fromEntries(resource.fields.map((field) => [field.name, field.options?.[0] || '']))]));
 const money = (value) => `ZMW ${Number(value || 0).toLocaleString('en-ZM', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const resourceLoaders = {
+  projects: getProjects,
+  expenses: getExpenses,
+  suppliers: getSuppliers,
+  equipments: getEquipment,
+};
+
+async function loadResource(resourceKey, endpoint) {
+  const load = resourceLoaders[resourceKey];
+  if (load) return load();
+
+  const response = await api.get(endpoint);
+  return response.data?.data ?? response.data;
+}
 
 function BuildTrackApp() {
   const [activePage, setActivePage] = useState('dashboard');
@@ -51,18 +73,27 @@ function BuildTrackApp() {
   const [dashboardError, setDashboardError] = useState('');
 
   useEffect(() => {
+    let ignore = false;
+
     const loadDashboardData = async () => {
+      setDashboardLoading(true);
+      setDashboardError('');
       try {
-        const [projectResponse, expenseResponse] = await Promise.all([api.get('/projects'), api.get('/expenses')]);
-        setProjects(projectResponse.data);
-        setExpenses(expenseResponse.data);
+        const [projectRows, expenseRows] = await Promise.all([getProjects(), getExpenses()]);
+        if (ignore) return;
+        setProjects(Array.isArray(projectRows) ? projectRows : []);
+        setExpenses(Array.isArray(expenseRows) ? expenseRows : []);
       } catch (error) {
-        setDashboardError(apiError(error));
+        if (!ignore) setDashboardError(error.message || apiError(error));
       } finally {
-        setDashboardLoading(false);
+        if (!ignore) setDashboardLoading(false);
       }
     };
     loadDashboardData();
+
+    return () => {
+      ignore = true;
+    };
   }, []);
 
   const openCreate = (page) => setActivePage(page);
@@ -89,7 +120,7 @@ function NavButton({ active, onClick, icon: Icon, children }) { return <button t
 function DashboardPage({ projects, expenses, loading, error, onAction }) {
   const budget = projects.reduce((sum, project) => sum + Number(recordValue(project, 'allocated_budget', 'Project_Budget') || 0), 0);
   const spending = expenses.reduce((sum, expense) => sum + Number(recordValue(expense, 'amount', 'Amount') || 0), 0);
-  return <div className="mx-auto max-w-6xl"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-[#1d6d78]">Overview</p><h1 className="text-3xl font-bold sm:text-4xl">Dashboard Overview</h1><p className="mt-2 text-sm text-slate-500">Live project, expense, and budget summary</p></div><button type="button" onClick={() => onAction('projects')} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#1d6d78] px-4 py-3 text-sm font-bold text-white"><Plus size={17} /> Create New Project</button></div>{error && <Alert message={error} />}<section className="grid gap-4 md:grid-cols-3"><Metric value={money(budget)} label="Allocated budget" /><Metric value={money(spending)} label="Total expenditure" /><Metric value={projects.length} label="Projects" /></section><section className="mt-8 rounded-xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">Quick Actions</h2><div className="mt-5 flex flex-wrap gap-3"><ActionButton onClick={() => onAction('projects')}><Plus size={17} /> Create New Project</ActionButton><ActionButton onClick={() => onAction('expenses')}><Receipt size={17} /> Record Expense</ActionButton><ActionButton onClick={() => onAction('reports')}><FileText size={17} /> Generate Budget Report</ActionButton><ActionButton onClick={() => onAction('suppliers')}><Truck size={17} /> Add Supplier</ActionButton><ActionButton onClick={() => onAction('equipments')}><Wrench size={17} /> Assign Equipment</ActionButton></div>{loading && <p className="mt-5 text-xs text-slate-400">Loading live data...</p>}</section></div>;
+  return <div className="mx-auto max-w-6xl"><div className="mb-8 flex flex-col justify-between gap-5 sm:flex-row sm:items-end"><div><p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-[#1d6d78]">Overview</p><h1 className="text-3xl font-bold sm:text-4xl">Dashboard Overview</h1><p className="mt-2 text-sm text-slate-500">Live project, expense, and budget summary</p></div><button type="button" onClick={() => onAction('projects')} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#1d6d78] px-4 py-3 text-sm font-bold text-white"><Plus size={17} /> Create New Project</button></div>{error && <Alert message={error} />}{!loading && !error && !projects.length && !expenses.length && <p className="mb-5 text-sm text-slate-500">No dashboard data is available yet.</p>}<section className="grid gap-4 md:grid-cols-3"><Metric value={money(budget)} label="Allocated budget" /><Metric value={money(spending)} label="Total expenditure" /><Metric value={projects.length} label="Projects" /></section><section className="mt-8 rounded-xl bg-white p-6 shadow-sm"><h2 className="text-xl font-bold">Quick Actions</h2><div className="mt-5 flex flex-wrap gap-3"><ActionButton onClick={() => onAction('projects')}><Plus size={17} /> Create New Project</ActionButton><ActionButton onClick={() => onAction('expenses')}><Receipt size={17} /> Record Expense</ActionButton><ActionButton onClick={() => onAction('reports')}><FileText size={17} /> Generate Budget Report</ActionButton><ActionButton onClick={() => onAction('suppliers')}><Truck size={17} /> Add Supplier</ActionButton><ActionButton onClick={() => onAction('equipments')}><Wrench size={17} /> Assign Equipment</ActionButton></div>{loading && <p className="mt-5 text-xs text-slate-400">Loading live data...</p>}</section></div>;
 }
 
 function ResourcePage({ resourceKey, projects, onProjectsChange, onExpensesChange }) {
@@ -103,19 +134,28 @@ function ResourcePage({ resourceKey, projects, onProjectsChange, onExpensesChang
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
+    let ignore = false;
+
     const loadRecords = async () => {
       setLoading(true);
+      setError('');
       try {
-        const response = await api.get(resource.endpoint);
-        setRecords(Array.isArray(response.data) ? response.data : []);
+        const rows = await loadResource(resourceKey, resource.endpoint);
+        if (!ignore) setRecords(Array.isArray(rows) ? rows : []);
       } catch (requestError) {
-        setError(apiError(requestError));
-        setRecords([]);
+        if (!ignore) {
+          setError(requestError.message || apiError(requestError));
+          setRecords([]);
+        }
       } finally {
-        setLoading(false);
+        if (!ignore) setLoading(false);
       }
     };
     loadRecords();
+
+    return () => {
+      ignore = true;
+    };
   }, [resource.endpoint, resourceKey]);
 
   const submit = async (event) => {
@@ -131,8 +171,8 @@ function ResourcePage({ resourceKey, projects, onProjectsChange, onExpensesChang
       } else {
         await api.post(resource.endpoint, payload);
       }
-      const refreshedResponse = await api.get(resource.endpoint);
-      const nextRecords = Array.isArray(refreshedResponse.data) ? refreshedResponse.data : [];
+      const refreshedRows = await loadResource(resourceKey, resource.endpoint);
+      const nextRecords = Array.isArray(refreshedRows) ? refreshedRows : [];
       setRecords(nextRecords);
       if (resourceKey === 'projects') onProjectsChange(nextRecords);
       if (resourceKey === 'expenses') onExpensesChange(nextRecords);
@@ -144,8 +184,8 @@ function ResourcePage({ resourceKey, projects, onProjectsChange, onExpensesChang
     setError('');
     try {
       await api.delete(`${resource.endpoint}/${id}`);
-      const refreshedResponse = await api.get(resource.endpoint);
-      const nextRecords = Array.isArray(refreshedResponse.data) ? refreshedResponse.data : [];
+      const refreshedRows = await loadResource(resourceKey, resource.endpoint);
+      const nextRecords = Array.isArray(refreshedRows) ? refreshedRows : [];
       setRecords(nextRecords);
       if (resourceKey === 'projects') onProjectsChange(nextRecords);
       if (resourceKey === 'expenses') onExpensesChange(nextRecords);
@@ -167,19 +207,116 @@ function getRecordId(record) { return recordValue(record, 'id', 'Project_ID', 'E
 function formFromRecord(resourceKey, record) {
   const form = { ...initialForms[resourceKey] };
   resources[resourceKey].fields.forEach((field) => {
-    const aliases = { name: ['name', 'Project_Name', 'Supplier_Name', 'Contractor_Name', 'Equipment_Name', 'Client_Name'], location: ['location', 'Location'], allocated_budget: ['allocated_budget', 'Allocated_Budget', 'Project_Budget'], start_date: ['start_date', 'Start_Date'], status: ['status', 'Status', 'Project_Status'], project_id: ['project_id', 'Project_ID'], category: ['category', 'Category', 'Expense_Category'], amount: ['amount', 'Amount'], description: ['description', 'Description'], expense_date: ['expense_date', 'Expense_Date'], service_type: ['service_type', 'Service_Type'], contact_phone: ['contact_phone', 'Phone_Number'], balance_due: ['balance_due', 'Balance_Due'], assigned_project_id: ['assigned_project_id', 'Assigned_Project_ID'] };
+    const aliases = { name: ['name', 'Project_Name', 'Supplier_Name', 'Contractor_Name', 'Equipment_Name', 'Client_Name'], location: ['location', 'Location'], allocated_budget: ['allocated_budget', 'Allocated_Budget', 'Project_Budget'], start_date: ['start_date', 'Start_Date'], status: ['status', 'Status', 'Project_Status', 'Availability_Status'], project_id: ['project_id', 'Project_ID'], category: ['category', 'Category', 'Expense_Category'], amount: ['amount', 'Amount'], description: ['description', 'Description'], expense_date: ['expense_date', 'Expense_Date'], service_type: ['service_type', 'Service_Type'], contact_phone: ['contact_phone', 'Phone_Number'], balance_due: ['balance_due', 'Balance_Due'], assigned_project_id: ['assigned_project_id', 'Assigned_Project_ID'] };
     form[field.name] = recordValue(record, ...(aliases[field.name] || [field.name])) ?? '';
   });
   return form;
 }
 
-function RecordCard({ resourceKey, record, onEdit, onDelete }) { const name = recordValue(record, 'name', 'Project_Name', 'Supplier_Name', 'Contractor_Name', 'Equipment_Name', 'Client_Name') || 'Unnamed record'; const id = getRecordId(record); const detail = resourceKey === 'expenses' ? `${recordValue(record, 'category', 'Expense_Category') || 'Expense'} · ${money(recordValue(record, 'amount', 'Amount'))}` : resourceKey === 'projects' ? money(recordValue(record, 'allocated_budget', 'Project_Budget')) : recordValue(record, 'status', 'Status', 'service_type', 'Service_Type') || recordValue(record, 'contact_phone', 'Phone_Number') || 'Active record'; return <article className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1d6d78]">#{id ?? 'new'}</p><h2 className="mt-2 font-bold">{name}</h2><p className="mt-2 text-sm text-slate-500">{detail}</p></div><div className="flex shrink-0 gap-1"><button type="button" onClick={() => onEdit(record)} className="rounded-lg p-2 text-[#1d6d78] hover:bg-[#e8f1ef]" aria-label={`Edit ${name}`} title="Edit"><Pencil size={16} /></button><button type="button" onClick={() => onDelete(id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" aria-label={`Delete ${name}`} title="Delete"><Trash2 size={16} /></button></div></div></article>; }
+function RecordCard({ resourceKey, record, onEdit, onDelete }) { const name = recordValue(record, 'name', 'Project_Name', 'Supplier_Name', 'Contractor_Name', 'Equipment_Name', 'Client_Name') || 'Unnamed record'; const id = getRecordId(record); const detail = resourceKey === 'expenses' ? `${recordValue(record, 'category', 'Expense_Category') || 'Expense'} · ${money(recordValue(record, 'amount', 'Amount'))}` : resourceKey === 'projects' ? money(recordValue(record, 'allocated_budget', 'Project_Budget')) : recordValue(record, 'status', 'Status', 'Availability_Status', 'service_type', 'Service_Type') || recordValue(record, 'contact_phone', 'Phone_Number') || 'Active record'; return <article className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1d6d78]">#{id ?? 'new'}</p><h2 className="mt-2 font-bold">{name}</h2><p className="mt-2 text-sm text-slate-500">{detail}</p></div><div className="flex shrink-0 gap-1"><button type="button" onClick={() => onEdit(record)} className="rounded-lg p-2 text-[#1d6d78] hover:bg-[#e8f1ef]" aria-label={`Edit ${name}`} title="Edit"><Pencil size={16} /></button><button type="button" onClick={() => onDelete(id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" aria-label={`Delete ${name}`} title="Delete"><Trash2 size={16} /></button></div></div></article>; }
 
 function ResourceModal({ resource, projects, form, setForm, editing, onClose, onSubmit, submitting }) { return <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#10241f]/70 p-4"><div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl"><div className="mb-6 flex items-center justify-between"><h2 className="text-xl font-bold">{editing ? 'Edit' : 'Add'} {resource.label.slice(0, -1)}</h2><button type="button" onClick={onClose} aria-label="Close dialog"><X size={20} /></button></div><form onSubmit={onSubmit} className="space-y-4">{resource.fields.map((field) => <FormField key={field.name} field={field} value={form[field.name]} projects={projects} onChange={(event) => setForm({ ...form, [field.name]: event.target.value })} />)}<div className="flex justify-end gap-3 pt-4"><button type="button" onClick={onClose} className="rounded-lg border border-[#1a3832] px-4 py-3 text-sm font-bold">Cancel</button><button type="submit" disabled={submitting} className="rounded-lg bg-[#1d6d78] px-4 py-3 text-sm font-bold text-white disabled:opacity-60">{submitting ? 'Saving...' : editing ? 'Update record' : 'Save record'}</button></div></form></div></div>; }
 
-function FormField({ field, value, projects, onChange }) { if (field.type === 'project') return <label className="block text-sm font-semibold">{field.label}<select name={field.name} value={value} onChange={onChange} required={field.required} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm"><option value="">Select project</option>{projects.filter((project) => ['Planning', 'In Progress', 'Active'].includes(recordValue(project, 'status', 'Status'))).map((project) => <option key={recordValue(project, 'id', 'Project_ID')} value={recordValue(project, 'id', 'Project_ID')}>{recordValue(project, 'name', 'Project_Name')}</option>)}</select></label>; if (field.type === 'select') return <label className="block text-sm font-semibold">{field.label}<select name={field.name} value={value} onChange={onChange} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm">{field.options.map((option) => <option key={option}>{option}</option>)}</select></label>; return <label className="block text-sm font-semibold">{field.label}<input name={field.name} type={field.type || 'text'} value={value} onChange={onChange} required={field.required} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 text-sm" /></label>; }
+function FormField({ field, value, projects, onChange }) { if (field.type === 'project') return <label className="block text-sm font-semibold">{field.label}<select name={field.name} value={value} onChange={onChange} required={field.required} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm"><option value="">Select project</option>{projects.filter((project) => ['Planning', 'In Progress', 'Planned', 'Active'].includes(recordValue(project, 'status', 'Status', 'Project_Status'))).map((project) => <option key={recordValue(project, 'id', 'Project_ID')} value={recordValue(project, 'id', 'Project_ID')}>{recordValue(project, 'name', 'Project_Name')}</option>)}</select></label>; if (field.type === 'select') return <label className="block text-sm font-semibold">{field.label}<select name={field.name} value={value} onChange={onChange} className="mt-2 w-full rounded-lg border border-slate-300 bg-white px-3 py-3 text-sm">{field.options.map((option) => <option key={option}>{option}</option>)}</select></label>; return <label className="block text-sm font-semibold">{field.label}<input name={field.name} type={field.type || 'text'} value={value} onChange={onChange} required={field.required} className="mt-2 w-full rounded-lg border border-slate-300 px-3 py-3 text-sm" /></label>; }
 
-function ReportsPage() { const [report, setReport] = useState([]); const [error, setError] = useState(''); useEffect(() => { api.get('/reports/budget').then((response) => setReport(response.data)).catch((requestError) => { setError(apiError(requestError)); setReport([]); }); }, []); return <div className="mx-auto max-w-6xl"><div className="mb-8"><p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-[#1d6d78]">Analysis</p><h1 className="text-3xl font-bold">Budget Reports</h1></div>{error && <Alert message={error} />}<div className="overflow-x-auto rounded-xl bg-white shadow-sm"><table className="w-full min-w-[620px] text-left text-sm"><thead className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500"><tr><th className="p-5">Project</th><th className="p-5">Budget</th><th className="p-5">Spent</th><th className="p-5">Variance</th></tr></thead><tbody>{report.map((row) => <tr key={row.project_id} className="border-b border-slate-100"><td className="p-5 font-semibold">{row.project_name}</td><td className="p-5">{money(row.allocated_budget)}</td><td className="p-5">{money(row.total_expenditure)}</td><td className="p-5">{money(row.variance)}</td></tr>)}</tbody></table></div></div>; }
+function ReportsPage() {
+  const [expenditure, setExpenditure] = useState([]);
+  const [supplierBalances, setSupplierBalances] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadReports() {
+      setLoading(true);
+      setError('');
+      try {
+        const [expenditureRows, supplierRows] = await Promise.all([
+          getExpenditureReport(),
+          getSupplierBalancesReport(),
+        ]);
+        if (ignore) return;
+        setExpenditure(Array.isArray(expenditureRows) ? expenditureRows : []);
+        setSupplierBalances(Array.isArray(supplierRows) ? supplierRows : []);
+      } catch (requestError) {
+        if (!ignore) {
+          setError(requestError.message || apiError(requestError));
+          setExpenditure([]);
+          setSupplierBalances([]);
+        }
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadReports();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  return (
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-8">
+        <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-[#1d6d78]">Analysis</p>
+        <h1 className="text-3xl font-bold">Financial Reports</h1>
+      </div>
+      {error && <Alert message={error} />}
+      {loading && <p className="mb-5 text-sm text-slate-500" role="status">Loading reports...</p>}
+      <div className="space-y-8">
+        <ReportTable
+          title="Project expenditure vs budget"
+          rows={expenditure}
+          idField="Project_ID"
+          emptyMessage="No project expenditure data found."
+          columns={[
+            { label: 'Project', render: (row) => row.Project_Name },
+            { label: 'Budget', render: (row) => money(row.Project_Budget) },
+            { label: 'Expenditure', render: (row) => money(row.TotalExpenditure) },
+            { label: 'Remaining', render: (row) => money(row.RemainingExpenditure) },
+            { label: 'Budget used', render: (row) => row.BudgetUsedPercentage == null ? 'N/A' : `${Number(row.BudgetUsedPercentage).toFixed(2)}%` },
+          ]}
+        />
+        <ReportTable
+          title="Supplier balances"
+          rows={supplierBalances}
+          idField="Supplier_ID"
+          emptyMessage="No supplier balance data found."
+          columns={[
+            { label: 'Supplier', render: (row) => row.Supplier_Name },
+            { label: 'Total ordered', render: (row) => money(row.TotalOrdered) },
+            { label: 'Total paid', render: (row) => money(row.TotalPaid) },
+            { label: 'Outstanding balance', render: (row) => money(row.OutstandingBalance) },
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ReportTable({ title, rows, idField, emptyMessage, columns }) {
+  return (
+    <section>
+      <h2 className="mb-3 text-xl font-bold">{title}</h2>
+      <div className="overflow-x-auto rounded-xl bg-white shadow-sm ring-1 ring-slate-200/70">
+        <table className="w-full min-w-[620px] text-left text-sm">
+          <thead className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
+            <tr>{columns.map((column) => <th key={column.label} className="p-4">{column.label}</th>)}</tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => (
+              <tr key={row[idField]} className="border-b border-slate-100 last:border-0">
+                {columns.map((column) => <td key={column.label} className="p-4">{column.render(row)}</td>)}
+              </tr>
+            ))}
+            {!rows.length && <tr><td colSpan={columns.length} className="p-5 text-slate-500">{emptyMessage}</td></tr>}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
 
 function Metric({ value, label }) { return <article className="rounded-xl bg-[#e9ecef] p-6"><p className="text-3xl font-extrabold">{value}</p><p className="mt-4 font-bold">{label}</p></article>; }
 function ActionButton({ children, onClick }) { return <button type="button" onClick={onClick} className="inline-flex items-center justify-center gap-2 rounded-lg border border-[#1a3832] px-4 py-3 text-sm font-bold hover:bg-[#e8f1ef]">{children}</button>; }
