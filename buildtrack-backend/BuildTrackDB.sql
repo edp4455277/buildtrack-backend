@@ -160,7 +160,7 @@ CREATE TABLE Equipments (
 
 -- CREATE EQUIPMENT ALLOCATIONS TABLE
 CREATE TABLE Equipment_Allocations (
-    Allocation_ID INT PRIMARY KEY,
+    Allocation_ID INT AUTO_INCREMENT PRIMARY KEY,
     Equipment_ID INT,
     Project_ID INT,
     Allocation_Start_Date DATE,
@@ -195,7 +195,7 @@ CREATE TABLE Project_Employees (
 
 -- 	CREATE PROJECT EXPENSES TABLE
 CREATE TABLE Project_Expenses (
-    Expense_ID INT PRIMARY KEY,
+    Expense_ID INT AUTO_INCREMENT PRIMARY KEY,
     Project_ID INT,
     Expense_Date DATE,
     Expense_Category ENUM('Materials','Labour','Transport','Equipment','Other') NOT NULL,
@@ -268,16 +268,16 @@ VALUES
 -- PROJECT SAMPLE DATA
 INSERT INTO Projects (Project_ID,Client_ID,Contractor_ID,Project_Manager_ID,Project_Name,Project_Description,Start_Date,Expected_End_Date,Actual_End_Date,Project_Status,Project_Budget)
 VALUES
-(1,1,2,1,'Chongwe Apartments','Construction of Apartment Units','2024-05-10','2024-10-20','2024-11-08','Completed',2500000),
-(2,2,3,5,'Astro Housing Unit', 'Construction of Housing Units','2024-05-25','2024-12-10','2025-02-05','Completed',4500000),
-(3,3,10,8,'Zambezi Storage Facility','Construction of Agricultural Storage Facility','2024-07-12','2025-01-03','2025-02-10','Completed',1300000),
-(4,4,8,1,'Lusaka Housing Properties','Rehabilitation of Lusaka Housing Properties','2024-12-29','2025-03-21','2025-04-18', 'Completed',800000),
-(5,5,7,5,'Arcades Offices','Maintenance of Arcades Offices','2025-03-01','2025-04-26','2025-05-01','Completed',750000),
-(6,6,9,8,'Kabwe School Block','Construction of a New Classroom Block','2025-05-01','2025-09-12','2025-09-30','Completed',2000000),
-(7,7,4,8,'New Mpongwe Council Building','Construction of Mpongwe Council Building','2026-01-09','2026-11-25',NULL,'Active',5000000),
-(8,8,1,5,'Zambia Sugar Facility','Construction of New Zambia Sugar Facility','2026-02-04','2027-02-04',NULL,'Active',9000000),
-(9,9,5,1,'School of Business Campus','Construction of a School of Business Campus','2026-12-09','2028-12-10',NULL,'Planned',17000000),
-(10,10,6,5, 'National Assembly Library','Rehabilitation of National Assembly Library','2027-01-01','2028-05-01',NULL,'Planned',350000);
+(1,1,2,1,'Chongwe Apartments','Construction of Apartment Units','2024-05-10','2024-10-20','2024-11-08','Completed',85000),
+(2,2,3,5,'Astro Housing Unit', 'Construction of Housing Units','2024-05-25','2024-12-10','2025-02-05','Completed',50000),
+(3,3,10,8,'Zambezi Storage Facility','Construction of Agricultural Storage Facility','2024-07-12','2025-01-03','2025-02-10','Completed',100000),
+(4,4,8,1,'Lusaka Housing Properties','Rehabilitation of Lusaka Housing Properties','2024-12-29','2025-03-21','2025-04-18', 'Completed',120000),
+(5,5,7,5,'Arcades Offices','Maintenance of Arcades Offices','2025-03-01','2025-04-26','2025-05-01','Completed',500000),
+(6,6,9,8,'Kabwe School Block','Construction of a New Classroom Block','2025-05-01','2025-09-12','2025-09-30','Completed',110000),
+(7,7,4,8,'New Mpongwe Council Building','Construction of Mpongwe Council Building','2026-01-09','2026-11-25',NULL,'Active',60000),
+(8,8,1,5,'Zambia Sugar Facility','Construction of New Zambia Sugar Facility','2026-02-04','2027-02-04',NULL,'Active',50000),
+(9,9,5,1,'School of Business Campus','Construction of a School of Business Campus','2026-12-09','2028-12-10',NULL,'Planned',55000),
+(10,10,6,5, 'National Assembly Library','Rehabilitation of National Assembly Library','2027-01-01','2028-05-01',NULL,'Planned',90000);
 
 -- SUPPLIERS SAMPLE DATA
 INSERT INTO Suppliers (Supplier_ID, Supplier_Name, Phone_Number, Email, Address)
@@ -310,16 +310,16 @@ VALUES
 -- PURCHASE ORDERS SAMPLE DATA
 INSERT INTO Purchase_Orders ( Purchase_Order_ID, Project_ID, Supplier_ID, Order_Date, Expected_Delivery_Date, Status,Total_Amount)
 VALUES
-(1,1,1,'2024-04-10','2024-05-03','Delivered',75000),
-(2,2,10,'2025-03-01','2025-05-10','Delivered',56000),
-(3,3,4,'2024-06-01','2024-06-30','Delivered',27000),
-(4,4,5,'2024-10-01','2024-11-26','Delivered',35000),
-(5,5,7,'2025-02-05','2025-02-26','Delivered',150000),
-(6,6,3,'2025-07-10','2025-08-30','Delivered',45000),
-(7,7,8,'2026-07-30','2026-10-26','Approved',95000),
-(8,8,9,'2026-09-19','2026-11-19','Approved',82000),
-(9,9,2,'2026-10-30','2027-01-25','Draft',100000),
-(10,10,6,'2026-11-01','2027-06-01','Draft',130000);
+(1,1,1,'2024-04-10','2024-05-03','Delivered',62500),
+(2,2,10,'2025-03-01','2025-05-10','Delivered',38000),
+(3,3,4,'2024-06-01','2024-06-30','Delivered',78000),
+(4,4,5,'2024-10-01','2024-11-26','Delivered',82500),
+(5,5,7,'2025-02-05','2025-02-26','Delivered',450000),
+(6,6,3,'2025-07-10','2025-08-30','Delivered',95000),
+(7,7,8,'2026-07-30','2026-10-26','Approved',54000),
+(8,8,9,'2026-09-19','2026-11-19','Approved',37500),
+(9,9,2,'2026-10-30','2027-01-25','Draft',42500),
+(10,10,6,'2026-11-01','2027-06-01','Draft',75000);
 
 -- PURCHASE ORDER ITEMS
 INSERT INTO Purchase_Order_Items (Purchase_Order_Item, Purchase_Order_ID, Material_ID, Quantity, Unit_Price)
@@ -384,23 +384,23 @@ VALUES
 -- PROJECT EXPENSES
 INSERT INTO Project_Expenses ( Expense_ID, Project_ID, Expense_Date, Expense_Category, Description, Amount)
 VALUES
-(1,1,'2024-05-15','Materials','Purchase of cement and sand',75000),
-(2,2,'2025-03-10','Labour','Payment for construction workers',56000),
-(3,3,'2024-07-20','Transport','Transportation of materials to site',27000),
-(4,4,'2024-11-01','Equipment', 'Rental of excavator for foundation work',35000),
-(5,5,'2025-02-15','Materials','Purchase of furniture for offices',150000),
-(6,6,'2025-08-05','Labour','Payment for construction workers',45000);
+(1,1,'2024-05-15','Materials','Purchase of cement and sand',62500),
+(2,2,'2025-03-10','Labour','Payment for construction workers',38000),
+(3,3,'2024-07-20','Transport','Transportation of materials to site',78000),
+(4,4,'2024-11-01','Equipment', 'Rental of excavator for foundation work',82500),
+(5,5,'2025-02-15','Materials','Purchase of furniture for offices',450000),
+(6,6,'2025-08-05','Labour','Payment for construction workers',95000);
 
 -- PAYMENTS
 INSERT INTO Payments ( Payment_ID, Supplier_ID, Purchase_Order_ID, Payment_Date, Amount, Payment_Method,Reference_Number
 )
 VALUES
-(1,1,1,'2024-05-05',75000,'Bank Transfer','PAY-001'),
-(2,10,2,'2025-05-12',56000,'Cash','PAY-002'),
-(3,4,3,'2024-07-01',27000,'Mobile Money','PAY-003'),
-(4,5,4,'2024-11-05',35000,'Cheque','PAY-004'),
-(5,7,5,'2025-02-28',150000,'Bank Transfer','PAY-005'),
-(6,3,6,'2025-09-01',45000,'Cash','PAY-006');
+(1,1,1,'2024-05-05',62500,'Bank Transfer','PAY-001'),
+(2,10,2,'2025-05-12',38000,'Cash','PAY-002'),
+(3,4,3,'2024-07-01',78000,'Mobile Money','PAY-003'),
+(4,5,4,'2024-11-05',82500,'Cheque','PAY-004'),
+(5,7,5,'2025-02-28',450000,'Bank Transfer','PAY-005'),
+(6,3,6,'2025-09-01',95000,'Cash','PAY-006');
 
 -- PROJECT EMPLOYEE ASSIGNMENTS
 INSERT INTO Project_Employees ( Project_Employee_ID, Project_ID, Employee_ID, Assignment_Start_Date, Assignment_End_Date, Role, Status )
@@ -538,6 +538,12 @@ CREATE PROCEDURE sp_add_project_expense
     IN p_amount DECIMAL(14,2)
 )
 BEGIN
+     DECLARE EXIT HANDLER FOR SQLEXCEPTION
+    BEGIN
+        ROLLBACK;
+        RESIGNAL;
+    END;
+    
     IF NOT EXISTS
     (
         SELECT 1
@@ -549,9 +555,11 @@ BEGIN
     IF p_amount <= 0 THEN
         SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = 'Expense amount must be greater than zero';
     END IF;
+    START TRANSACTION;
     INSERT INTO Project_Expenses (Project_ID, Expense_Date, Expense_Category, Description, Amount)
     VALUES
     (p_project_id, p_expense_date, p_category, p_description,p_amount);
+    COMMIT;
 END//
 DELIMITER ;
 
