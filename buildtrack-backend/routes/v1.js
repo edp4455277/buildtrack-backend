@@ -1,5 +1,7 @@
 const express = require('express');
 const controller = require('../controllers/v1');
+const clientsController = require('../controllers/clientsController');
+const contractorsController = require('../controllers/contractorsController');
 
 const router = express.Router();
 const projects = express.Router();
@@ -32,12 +34,12 @@ equipment.post('/', controller.createEquipment);
 equipment.put('/:id', controller.updateEquipment);
 equipment.delete('/:id', controller.deleteEquipment);
 
-clients.get('/', controller.listClients);
+clients.get('/', clientsController.getClients);
 clients.post('/', controller.createClient);
 clients.put('/:id', controller.updateClient);
 clients.delete('/:id', controller.deleteClient);
 
-contractors.get('/', controller.listContractors);
+contractors.get('/', contractorsController.getContractors);
 contractors.post('/', controller.createContractor);
 contractors.put('/:id', controller.updateContractor);
 contractors.delete('/:id', controller.deleteContractor);
