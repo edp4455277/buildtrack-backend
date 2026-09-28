@@ -1,6 +1,33 @@
 const db = require('../config/db');
 const { nextId, releaseIdLocks, value, success, failure } = require('./dbHelpers');
 
+function projectStatus(status) {
+    return { Planning: 'Planned', 'In Progress': 'Active' }[status] || status;
+}
+
+function nullableDate(date) {
+    return date == null || (typeof date === 'string' && date.trim() === '') ? null : date;
+}
+
+function nullableNumber(number) {
+    if (number == null || (typeof number === 'string' && number.trim() === '')) return null;
+    return Number(number);
+}
+
+function isConstraintViolation(error) {
+    return error.sqlState?.startsWith('23') || [
+        'ER_CHECK_CONSTRAINT_VIOLATED',
+        'ER_NO_REFERENCED_ROW_2',
+        'ER_ROW_IS_REFERENCED_2',
+        'ER_DUP_ENTRY',
+        'ER_BAD_NULL_ERROR',
+    ].includes(error.code);
+}
+
+function invalidProjectFields(res) {
+    return res.status(400).json({ error: 'Invalid date range or form fields' });
+}
+
 async function getProjects(req, res) {
     try {
         const [rows] = await db.query(`
@@ -81,24 +108,27 @@ async function createProject(req, res) {
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `, [
             generated.id,
-            value(body, 'Client_ID', 'client_id') ?? null,
-            value(body, 'Contractor_ID', 'contractor_id') ?? null,
-            value(body, 'Project_Manager_ID', 'project_manager_id') ?? null,
+            nullableNumber(value(body, 'Client_ID', 'client_id')),
+            nullableNumber(value(body, 'Contractor_ID', 'contractor_id')),
+            nullableNumber(value(body, 'Project_Manager_ID', 'project_manager_id')),
             projectName,
             value(body, 'Project_Description', 'project_description', 'description') ?? null,
-            value(body, 'Start_Date', 'start_date') ?? null,
-            value(body, 'Expected_End_Date', 'expected_end_date') ?? null,
-            value(body, 'Actual_End_Date', 'actual_end_date') ?? null,
-            value(body, 'Project_Status', 'project_status', 'status') || 'Planned',
-            value(body, 'Project_Budget', 'project_budget', 'budget') ?? null,
+            nullableDate(value(body, 'Start_Date', 'start_date')),
+            nullableDate(value(body, 'Expected_End_Date', 'expected_end_date')),
+            nullableDate(value(body, 'Actual_End_Date', 'actual_end_date')),
+            projectStatus(value(body, 'Project_Status', 'project_status', 'status') || 'Planned'),
+            nullableNumber(value(body, 'Project_Budget', 'project_budget', 'budget')),
         ]);
 
         await connection.commit();
         transactionStarted = false;
         return success(res, { Project_ID: generated.id }, 201);
     } catch (error) {
-        if (transactionStarted) await connection.rollback();
-        return failure(res, error, error.code === 'ER_DUP_ENTRY' ? 409 : 500);
+        if (transactionStarted) {
+            try { await connection.rollback(); } catch (_) {}
+        }
+        if (isConstraintViolation(error)) return invalidProjectFields(res);
+        return failure(res, error);
     } finally {
         if (connection) {
             try { await releaseIdLocks(connection, locks); } finally { connection.release(); }
@@ -129,7 +159,15 @@ async function updateProject(req, res) {
             const fieldValue = value(body, ...keys);
             if (fieldValue !== undefined) {
                 updates.push(`${column} = ?`);
-                params.push(fieldValue);
+                if (column === 'Project_Status') {
+                    params.push(projectStatus(fieldValue));
+                } else if (['Start_Date', 'Expected_End_Date', 'Actual_End_Date'].includes(column)) {
+                    params.push(nullableDate(fieldValue));
+                } else if (['Client_ID', 'Contractor_ID', 'Project_Manager_ID', 'Project_Budget'].includes(column)) {
+                    params.push(nullableNumber(fieldValue));
+                } else {
+                    params.push(fieldValue);
+                }
             }
         }
 
@@ -153,8 +191,19 @@ async function updateProject(req, res) {
         );
         return success(res, rows[0]);
     } catch (error) {
-        return failure(res, error, error.code === 'ER_DUP_ENTRY' ? 409 : 500);
+        if (isConstraintViolation(error)) return invalidProjectFields(res);
+        return failure(res, error);
     }
 }
 
-module.exports = { getProjects, getProject, createProject, updateProject };
+async function deleteProject(req, res) {
+    try {
+        const [result] = await db.query('DELETE FROM Projects WHERE Project_ID = ?', [req.params.id]);
+        if (!result.affectedRows) return failure(res, { message: 'Project not found' }, 404);
+        return success(res, { Project_ID: Number(req.params.id) });
+    } catch (error) {
+        return failure(res, error, error.code === 'ER_ROW_IS_REFERENCED_2' ? 409 : 500);
+    }
+}
+
+module.exports = { getProjects, getProject, createProject, updateProject, deleteProject };

@@ -54,6 +54,50 @@ async function createSupplier(req, res) {
     }
 }
 
+async function updateSupplier(req, res) {
+    const fields = [
+        ['Supplier_Name', ['Supplier_Name', 'supplier_name', 'name']],
+        ['Phone_Number', ['Phone_Number', 'phone_number', 'phone']],
+        ['Email', ['Email', 'email']],
+        ['Address', ['Address', 'address']],
+    ];
+
+    try {
+        const body = req.body || {};
+        const updates = [];
+        const params = [];
+        for (const [column, keys] of fields) {
+            const fieldValue = value(body, ...keys);
+            if (fieldValue !== undefined) {
+                updates.push(`${column} = ?`);
+                params.push(fieldValue);
+            }
+        }
+        if (!updates.length) return failure(res, { message: 'At least one supplier field is required' }, 400);
+
+        params.push(req.params.id);
+        const [result] = await db.query(`UPDATE Suppliers SET ${updates.join(', ')} WHERE Supplier_ID = ?`, params);
+        if (!result.affectedRows) {
+            const [existing] = await db.query('SELECT Supplier_ID FROM Suppliers WHERE Supplier_ID = ?', [req.params.id]);
+            if (!existing.length) return failure(res, { message: 'Supplier not found' }, 404);
+        }
+        const [rows] = await db.query('SELECT * FROM Suppliers WHERE Supplier_ID = ?', [req.params.id]);
+        return success(res, rows[0]);
+    } catch (error) {
+        return failure(res, error, error.code === 'ER_DUP_ENTRY' ? 409 : 500);
+    }
+}
+
+async function deleteSupplier(req, res) {
+    try {
+        const [result] = await db.query('DELETE FROM Suppliers WHERE Supplier_ID = ?', [req.params.id]);
+        if (!result.affectedRows) return failure(res, { message: 'Supplier not found' }, 404);
+        return success(res, { Supplier_ID: Number(req.params.id) });
+    } catch (error) {
+        return failure(res, error, error.code === 'ER_ROW_IS_REFERENCED_2' ? 409 : 500);
+    }
+}
+
 async function createPurchaseOrder(req, res) {
     let connection;
     let transactionStarted = false;
@@ -152,4 +196,4 @@ async function createPurchaseOrder(req, res) {
     }
 }
 
-module.exports = { getSuppliers, createSupplier, createPurchaseOrder };
+module.exports = { getSuppliers, createSupplier, updateSupplier, deleteSupplier, createPurchaseOrder };

@@ -5,6 +5,12 @@ import {
 import { api, apiError, recordValue } from '../api';
 import {
   getEquipment,
+  getEmployees,
+  createEmployee,
+  updateEmployee,
+  deleteEmployee,
+  getClients,
+  getContractors,
   getExpenses,
   getExpenditureReport,
   getProjects,
@@ -15,10 +21,10 @@ import {
 const resources = {
   projects: { label: 'Projects', icon: Building2, endpoint: '/projects', title: 'Projects Directory', fields: [
     { name: 'name', label: 'Project name', required: true },
-    { name: 'location', label: 'Location' },
+    { name: 'project_description', label: 'Project description' },
     { name: 'allocated_budget', label: 'Allocated budget', type: 'number', required: true },
     { name: 'start_date', label: 'Start date', type: 'date' },
-    { name: 'status', label: 'Status', type: 'select', options: ['Planning', 'In Progress', 'Completed', 'On Hold'] },
+    { name: 'status', label: 'Status', type: 'select', options: ['Planning', 'In Progress', 'Completed', 'On Hold', 'Cancelled'] },
   ] },
   expenses: { label: 'Expenses', icon: Receipt, endpoint: '/expenses', title: 'Expense Ledger', fields: [
     { name: 'project_id', label: 'Project', type: 'project', required: true },
@@ -29,22 +35,28 @@ const resources = {
   ] },
   suppliers: { label: 'Suppliers', icon: Truck, endpoint: '/suppliers', title: 'Supplier Management', fields: [
     { name: 'name', label: 'Supplier name', required: true },
-    { name: 'service_type', label: 'Service type' },
-    { name: 'contact_phone', label: 'Contact phone' },
-    { name: 'balance_due', label: 'Balance due', type: 'number' },
+    { name: 'phone_number', label: 'Phone number' },
+    { name: 'email', label: 'Email', type: 'email' },
+    { name: 'address', label: 'Address' },
   ] },
   contractors: { label: 'Contractors', icon: Users, endpoint: '/contractors', title: 'Contractor Directory', fields: [
     { name: 'name', label: 'Contractor name', required: true },
-    { name: 'contact_phone', label: 'Contact phone' },
+    { name: 'phone_number', label: 'Phone number' },
+    { name: 'email', label: 'Email', type: 'email' },
+    { name: 'address', label: 'Address' },
+    { name: 'license_number', label: 'License number' },
   ] },
   equipments: { label: 'Equipment', icon: Wrench, endpoint: '/equipment', title: 'Equipment Tracking', fields: [
     { name: 'name', label: 'Equipment name', required: true },
+    { name: 'equipment_type', label: 'Equipment type' },
+    { name: 'registration_number', label: 'Registration number' },
     { name: 'status', label: 'Status', type: 'select', options: ['Available', 'In Use', 'Maintenance'] },
-    { name: 'assigned_project_id', label: 'Assigned project', type: 'project' },
   ] },
   clients: { label: 'Clients', icon: Users, endpoint: '/clients', title: 'Client Directory', fields: [
     { name: 'name', label: 'Client name', required: true },
-    { name: 'contact_phone', label: 'Contact phone' },
+    { name: 'phone_number', label: 'Phone number' },
+    { name: 'email', label: 'Email', type: 'email' },
+    { name: 'address', label: 'Address' },
   ] },
 };
 
@@ -55,6 +67,8 @@ const resourceLoaders = {
   expenses: getExpenses,
   suppliers: getSuppliers,
   equipments: getEquipment,
+  clients: getClients,
+  contractors: getContractors,
 };
 
 async function loadResource(resourceKey, endpoint) {
@@ -104,11 +118,12 @@ function BuildTrackApp() {
         <div className="mx-auto flex max-w-[1500px] items-center justify-between"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#b9d3cc]">BuildTrack Management</p><p className="mt-1 text-sm text-white/75">Construction operations workspace</p></div><button type="button" onClick={() => openCreate('projects')} className="inline-flex items-center gap-2 rounded-lg bg-[#d6e8d5] px-4 py-3 text-sm font-bold text-[#1a3832]"><Plus size={17} /> New project</button></div>
       </header>
       <div className="mx-auto flex max-w-[1500px]">
-        <aside className="hidden min-h-[calc(100vh-82px)] w-64 shrink-0 bg-[#1a3832] p-5 text-white lg:block"><p className="mb-7 border-b border-white/15 pb-6 text-lg font-bold">BuildTrack Admin</p><nav className="space-y-1" aria-label="Main navigation"><NavButton active={activePage === 'dashboard'} onClick={() => setActivePage('dashboard')} icon={LayoutGrid}>Dashboard</NavButton>{Object.entries(resources).map(([key, resource]) => <NavButton key={key} active={activePage === key} onClick={() => setActivePage(key)} icon={resource.icon}>{resource.label}</NavButton>)}<NavButton active={activePage === 'reports'} onClick={() => setActivePage('reports')} icon={FileText}>Reports</NavButton></nav></aside>
+        <aside className="hidden min-h-[calc(100vh-82px)] w-64 shrink-0 bg-[#1a3832] p-5 text-white lg:block"><p className="mb-7 border-b border-white/15 pb-6 text-lg font-bold">BuildTrack Admin</p><nav className="space-y-1" aria-label="Main navigation"><NavButton active={activePage === 'dashboard'} onClick={() => setActivePage('dashboard')} icon={LayoutGrid}>Dashboard</NavButton>{Object.entries(resources).map(([key, resource]) => <NavButton key={key} active={activePage === key} onClick={() => setActivePage(key)} icon={resource.icon}>{resource.label}</NavButton>)}<NavButton active={activePage === 'employees'} onClick={() => setActivePage('employees')} icon={Users}>Employees</NavButton><NavButton active={activePage === 'reports'} onClick={() => setActivePage('reports')} icon={FileText}>Reports</NavButton></nav></aside>
         <main className="min-w-0 flex-1 px-5 py-8 sm:px-8 lg:px-12">
           {activePage === 'dashboard' && <DashboardPage projects={projects} expenses={expenses} loading={dashboardLoading} error={dashboardError} onAction={openCreate} />}
           {activePage === 'reports' && <ReportsPage />}
-          {activePage !== 'dashboard' && activePage !== 'reports' && <ResourcePage resourceKey={activePage} projects={projects} onProjectsChange={setProjects} onExpensesChange={setExpenses} />}
+          {activePage === 'employees' && <EmployeesDirectory />}
+          {activePage !== 'dashboard' && activePage !== 'reports' && activePage !== 'employees' && <ResourcePage resourceKey={activePage} projects={projects} onProjectsChange={setProjects} onExpensesChange={setExpenses} />}
         </main>
       </div>
     </div>
@@ -161,10 +176,8 @@ function ResourcePage({ resourceKey, projects, onProjectsChange, onExpensesChang
   const submit = async (event) => {
     event.preventDefault(); setSubmitting(true); setError('');
     const payload = { ...form };
-    ['allocated_budget', 'amount', 'balance_due'].forEach((key) => { if (payload[key] !== '') payload[key] = parseFloat(payload[key]); });
+    ['allocated_budget', 'amount', 'project_id'].forEach((key) => { if (payload[key] !== '') payload[key] = parseFloat(payload[key]); });
     if (payload.project_id !== '') payload.project_id = parseInt(payload.project_id, 10);
-    if (payload.assigned_project_id === '') payload.assigned_project_id = null;
-    if (payload.assigned_project_id !== null) payload.assigned_project_id = parseInt(payload.assigned_project_id, 10);
     try {
       if (editingRecord) {
         await api.put(`${resource.endpoint}/${getRecordId(editingRecord)}`, payload);
@@ -202,18 +215,235 @@ function ResourcePage({ resourceKey, projects, onProjectsChange, onExpensesChang
   return <div className="mx-auto max-w-6xl"><div className="mb-8 flex items-end justify-between gap-4"><div><p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-[#1d6d78]">Operations</p><h1 className="text-3xl font-bold">{resource.title}</h1></div><button type="button" onClick={() => { setEditingRecord(null); setForm(initialForms[resourceKey]); setModalOpen(true); }} className="inline-flex items-center gap-2 rounded-lg bg-[#1d6d78] px-4 py-3 text-sm font-bold text-white"><Plus size={17} /> Add {resource.label.slice(0, -1)}</button></div>{error && <Alert message={error} />}{loading ? <p className="text-sm text-slate-500">Loading {resource.label.toLowerCase()}...</p> : <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">{records.map((record, index) => <RecordCard key={getRecordId(record) || index} resourceKey={resourceKey} record={record} onEdit={handleEdit} onDelete={handleDelete} />)}{!records.length && <p className="text-sm text-slate-500">No records found.</p>}</div>}{modalOpen && <ResourceModal resource={resource} projects={projects} form={form} setForm={setForm} editing={Boolean(editingRecord)} onClose={() => { setModalOpen(false); setEditingRecord(null); }} onSubmit={submit} submitting={submitting} />}</div>;
 }
 
+function EmployeesDirectory() {
+  const [employees, setEmployees] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [modalOpen, setModalOpen] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState(null);
+  const [form, setForm] = useState(emptyEmployeeForm());
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let ignore = false;
+
+    async function loadEmployees() {
+      setLoading(true);
+      setError('');
+      try {
+        const rows = await getEmployees();
+        if (!ignore) setEmployees(Array.isArray(rows) ? rows : []);
+      } catch (requestError) {
+        if (!ignore) {
+          setError(requestError.message || 'Unable to load employees.');
+          setEmployees([]);
+        }
+      } finally {
+        if (!ignore) setLoading(false);
+      }
+    }
+
+    loadEmployees();
+    return () => {
+      ignore = true;
+    };
+  }, []);
+
+  const openCreate = () => {
+    setEditingEmployee(null);
+    setForm(emptyEmployeeForm());
+    setError('');
+    setModalOpen(true);
+  };
+
+  const openEdit = (employee) => {
+    setEditingEmployee(employee);
+    setForm({
+      Employee_Name: employee.Employee_Name || '',
+      Job_Title: employee.Job_Title || '',
+      Phone_Number: employee.Phone_Number || '',
+      Email: employee.Email || '',
+      Address: employee.Address || '',
+      Hire_Date: employee.Hire_Date ? String(employee.Hire_Date).slice(0, 10) : '',
+    });
+    setError('');
+    setModalOpen(true);
+  };
+
+  const saveEmployee = async (event) => {
+    event.preventDefault();
+    setSubmitting(true);
+    setError('');
+    try {
+      const payload = Object.fromEntries(
+        Object.entries(form).map(([key, value]) => [key, value === '' ? null : value])
+      );
+      if (editingEmployee) {
+        const saved = await updateEmployee(editingEmployee.Employee_ID, payload);
+        setEmployees((current) => current.map((employee) => (
+          employee.Employee_ID === saved.Employee_ID ? saved : employee
+        )));
+      } else {
+        const saved = await createEmployee(payload);
+        setEmployees((current) => [saved, ...current]);
+      }
+      setModalOpen(false);
+      setEditingEmployee(null);
+      setForm(emptyEmployeeForm());
+    } catch (requestError) {
+      setError(apiError(requestError));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const removeEmployee = async (employee) => {
+    if (!window.confirm(`Delete ${employee.Employee_Name}?`)) return;
+    setError('');
+    try {
+      await deleteEmployee(employee.Employee_ID);
+      setEmployees((current) => current.filter((row) => row.Employee_ID !== employee.Employee_ID));
+    } catch (requestError) {
+      setError(apiError(requestError));
+    }
+  };
+
+  return (
+    <div className="mx-auto max-w-6xl">
+      <div className="mb-8 flex items-end justify-between gap-4">
+        <div>
+          <p className="mb-2 text-xs font-bold uppercase tracking-[0.18em] text-[#1d6d78]">People</p>
+          <h1 className="text-3xl font-bold">Employees Directory</h1>
+        </div>
+        <button type="button" onClick={openCreate} className="inline-flex items-center gap-2 rounded-md bg-[#1d6d78] px-4 py-3 text-sm font-bold text-white hover:bg-[#165761]">
+          <Plus size={17} /> Add Employee
+        </button>
+      </div>
+      {error && <Alert message={error} />}
+      {loading ? (
+        <p className="text-sm text-slate-500" role="status">Loading employees...</p>
+      ) : (
+        <div className="overflow-x-auto rounded-xl bg-white shadow-sm ring-1 ring-slate-200/70">
+          <table className="w-full min-w-[640px] text-left text-sm">
+            <thead className="border-b border-slate-200 text-xs uppercase tracking-wider text-slate-500">
+              <tr>
+                <th className="p-4">Employee Name</th>
+                <th className="p-4">Role</th>
+                <th className="p-4">Phone</th>
+                <th className="p-4">Email</th>
+                <th className="p-4">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {employees.map((employee) => (
+                <tr key={employee.Employee_ID} className="border-b border-slate-100 last:border-0">
+                  <td className="p-4 font-semibold">{employee.Employee_Name || '—'}</td>
+                  <td className="p-4">{employee.Job_Title || '—'}</td>
+                  <td className="p-4">{employee.Phone_Number || '—'}</td>
+                  <td className="p-4">{employee.Email || '—'}</td>
+                  <td className="p-3">
+                    <div className="flex items-center gap-1">
+                      <button type="button" onClick={() => openEdit(employee)} className="rounded-md p-2 text-[#1d6d78] hover:bg-[#e8f1ef]" aria-label={`Edit ${employee.Employee_Name}`} title="Edit employee">
+                        <Pencil size={16} />
+                      </button>
+                      <button type="button" onClick={() => removeEmployee(employee)} className="rounded-md p-2 text-red-600 hover:bg-red-50" aria-label={`Delete ${employee.Employee_Name}`} title="Delete employee">
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+              {!employees.length && (
+                <tr>
+                  <td colSpan={5} className="p-5 text-slate-500">No employees found.</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+      {modalOpen && (
+        <EmployeeModal
+          form={form}
+          setForm={setForm}
+          editing={Boolean(editingEmployee)}
+          submitting={submitting}
+          onClose={() => setModalOpen(false)}
+          onSubmit={saveEmployee}
+        />
+      )}
+    </div>
+  );
+}
+
+function emptyEmployeeForm() {
+  return {
+    Employee_Name: '',
+    Job_Title: '',
+    Phone_Number: '',
+    Email: '',
+    Address: '',
+    Hire_Date: '',
+  };
+}
+
+function EmployeeModal({ form, setForm, editing, submitting, onClose, onSubmit }) {
+  const fields = [
+    ['Employee_Name', 'Employee name', 'text', true],
+    ['Job_Title', 'Role', 'text', false],
+    ['Phone_Number', 'Phone', 'tel', false],
+    ['Email', 'Email', 'email', false],
+    ['Address', 'Address', 'text', false],
+    ['Hire_Date', 'Hire date', 'date', false],
+  ];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#10241f]/70 p-4" role="presentation">
+      <section className="w-full max-w-lg rounded-lg bg-white p-6 shadow-2xl" role="dialog" aria-modal="true" aria-labelledby="employee-form-title">
+        <div className="mb-6 flex items-center justify-between">
+          <h2 id="employee-form-title" className="text-xl font-bold">{editing ? 'Edit employee' : 'Add employee'}</h2>
+          <button type="button" onClick={onClose} className="rounded-md p-2 text-slate-500 hover:bg-slate-100" aria-label="Close employee form">
+            <X size={19} />
+          </button>
+        </div>
+        <form onSubmit={onSubmit} className="space-y-4">
+          {fields.map(([key, label, type, required]) => (
+            <label key={key} className="block text-sm font-semibold">
+              {label}
+              <input
+                name={key}
+                type={type}
+                value={form[key]}
+                required={required}
+                onChange={(event) => setForm((current) => ({ ...current, [key]: event.target.value }))}
+                className="mt-2 w-full rounded-md border border-slate-300 px-3 py-2.5 font-normal outline-none focus:border-[#1d6d78] focus:ring-2 focus:ring-[#1d6d78]/20"
+              />
+            </label>
+          ))}
+          <div className="flex justify-end gap-3 pt-3">
+            <button type="button" onClick={onClose} className="rounded-md border border-slate-300 px-4 py-2.5 text-sm font-semibold">Cancel</button>
+            <button type="submit" disabled={submitting} className="rounded-md bg-[#1d6d78] px-4 py-2.5 text-sm font-bold text-white disabled:opacity-60">
+              {submitting ? 'Saving...' : editing ? 'Save changes' : 'Create employee'}
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
+  );
+}
+
 function getRecordId(record) { return recordValue(record, 'id', 'Project_ID', 'Expense_ID', 'Supplier_ID', 'Contractor_ID', 'Equipment_ID', 'Client_ID'); }
 
 function formFromRecord(resourceKey, record) {
   const form = { ...initialForms[resourceKey] };
   resources[resourceKey].fields.forEach((field) => {
-    const aliases = { name: ['name', 'Project_Name', 'Supplier_Name', 'Contractor_Name', 'Equipment_Name', 'Client_Name'], location: ['location', 'Location'], allocated_budget: ['allocated_budget', 'Allocated_Budget', 'Project_Budget'], start_date: ['start_date', 'Start_Date'], status: ['status', 'Status', 'Project_Status', 'Availability_Status'], project_id: ['project_id', 'Project_ID'], category: ['category', 'Category', 'Expense_Category'], amount: ['amount', 'Amount'], description: ['description', 'Description'], expense_date: ['expense_date', 'Expense_Date'], service_type: ['service_type', 'Service_Type'], contact_phone: ['contact_phone', 'Phone_Number'], balance_due: ['balance_due', 'Balance_Due'], assigned_project_id: ['assigned_project_id', 'Assigned_Project_ID'] };
+    const aliases = { name: ['name', 'Project_Name', 'Supplier_Name', 'Contractor_Name', 'Equipment_Name', 'Client_Name'], project_description: ['project_description', 'Project_Description'], allocated_budget: ['allocated_budget', 'Allocated_Budget', 'Project_Budget'], start_date: ['start_date', 'Start_Date'], status: ['status', 'Status', 'Project_Status', 'Availability_Status'], project_id: ['project_id', 'Project_ID'], category: ['category', 'Category', 'Expense_Category'], amount: ['amount', 'Amount'], description: ['description', 'Description'], expense_date: ['expense_date', 'Expense_Date'], phone_number: ['phone_number', 'Phone_Number'], email: ['email', 'Email'], address: ['address', 'Address'], license_number: ['license_number', 'License_Number'], equipment_type: ['equipment_type', 'Equipment_Type'], registration_number: ['registration_number', 'Registration_Number'] };
     form[field.name] = recordValue(record, ...(aliases[field.name] || [field.name])) ?? '';
   });
   return form;
 }
 
-function RecordCard({ resourceKey, record, onEdit, onDelete }) { const name = recordValue(record, 'name', 'Project_Name', 'Supplier_Name', 'Contractor_Name', 'Equipment_Name', 'Client_Name') || 'Unnamed record'; const id = getRecordId(record); const detail = resourceKey === 'expenses' ? `${recordValue(record, 'category', 'Expense_Category') || 'Expense'} · ${money(recordValue(record, 'amount', 'Amount'))}` : resourceKey === 'projects' ? money(recordValue(record, 'allocated_budget', 'Project_Budget')) : recordValue(record, 'status', 'Status', 'Availability_Status', 'service_type', 'Service_Type') || recordValue(record, 'contact_phone', 'Phone_Number') || 'Active record'; return <article className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1d6d78]">#{id ?? 'new'}</p><h2 className="mt-2 font-bold">{name}</h2><p className="mt-2 text-sm text-slate-500">{detail}</p></div><div className="flex shrink-0 gap-1"><button type="button" onClick={() => onEdit(record)} className="rounded-lg p-2 text-[#1d6d78] hover:bg-[#e8f1ef]" aria-label={`Edit ${name}`} title="Edit"><Pencil size={16} /></button><button type="button" onClick={() => onDelete(id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" aria-label={`Delete ${name}`} title="Delete"><Trash2 size={16} /></button></div></div></article>; }
+function RecordCard({ resourceKey, record, onEdit, onDelete }) { const name = recordValue(record, 'name', 'Project_Name', 'Supplier_Name', 'Contractor_Name', 'Equipment_Name', 'Client_Name') || 'Unnamed record'; const id = getRecordId(record); const detail = resourceKey === 'expenses' ? `${recordValue(record, 'category', 'Expense_Category') || 'Expense'} · ${money(recordValue(record, 'amount', 'Amount'))}` : resourceKey === 'projects' ? money(recordValue(record, 'allocated_budget', 'Project_Budget')) : recordValue(record, 'status', 'Status', 'Project_Status', 'Availability_Status', 'equipment_type', 'Equipment_Type') || recordValue(record, 'phone_number', 'Phone_Number') || 'Active record'; return <article className="rounded-xl bg-white p-5 shadow-sm ring-1 ring-slate-200/70"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#1d6d78]">#{id ?? 'new'}</p><h2 className="mt-2 font-bold">{name}</h2><p className="mt-2 text-sm text-slate-500">{detail}</p></div><div className="flex shrink-0 gap-1"><button type="button" onClick={() => onEdit(record)} className="rounded-lg p-2 text-[#1d6d78] hover:bg-[#e8f1ef]" aria-label={`Edit ${name}`} title="Edit"><Pencil size={16} /></button><button type="button" onClick={() => onDelete(id)} className="rounded-lg p-2 text-red-600 hover:bg-red-50" aria-label={`Delete ${name}`} title="Delete"><Trash2 size={16} /></button></div></div></article>; }
 
 function ResourceModal({ resource, projects, form, setForm, editing, onClose, onSubmit, submitting }) { return <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#10241f]/70 p-4"><div className="w-full max-w-lg rounded-xl bg-white p-6 shadow-2xl"><div className="mb-6 flex items-center justify-between"><h2 className="text-xl font-bold">{editing ? 'Edit' : 'Add'} {resource.label.slice(0, -1)}</h2><button type="button" onClick={onClose} aria-label="Close dialog"><X size={20} /></button></div><form onSubmit={onSubmit} className="space-y-4">{resource.fields.map((field) => <FormField key={field.name} field={field} value={form[field.name]} projects={projects} onChange={(event) => setForm({ ...form, [field.name]: event.target.value })} />)}<div className="flex justify-end gap-3 pt-4"><button type="button" onClick={onClose} className="rounded-lg border border-[#1a3832] px-4 py-3 text-sm font-bold">Cancel</button><button type="submit" disabled={submitting} className="rounded-lg bg-[#1d6d78] px-4 py-3 text-sm font-bold text-white disabled:opacity-60">{submitting ? 'Saving...' : editing ? 'Update record' : 'Save record'}</button></div></form></div></div>; }
 

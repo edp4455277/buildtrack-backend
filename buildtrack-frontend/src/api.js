@@ -1,13 +1,7 @@
-import axios from 'axios';
+import { api, apiError, BASE_URL } from './services/api';
 
-export const API_URL = 'http://localhost:3000/api';
-
-export const api = axios.create({ baseURL: API_URL });
-
-export function apiError(error) {
-  console.error(error.response?.data || error);
-  return error.response?.data?.error || 'Something went wrong. Please try again.';
-}
+export const API_URL = BASE_URL;
+export { api, apiError };
 
 export function recordValue(record, ...keys) {
   return keys.reduce((value, key) => value ?? record?.[key], undefined);

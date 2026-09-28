@@ -8,8 +8,10 @@ const expenseRoutes = require('./routes/expenses');
 const supplierRoutes = require('./routes/suppliers');
 const equipmentRoutes = require('./routes/equipment');
 const reportRoutes = require('./routes/reports');
+const employeeRoutes = require('./routes/employees');
+const clientRoutes = require('./routes/clients');
+const contractorRoutes = require('./routes/contractors');
 const v1Routes = require('./routes/v1');
-const db = require('./config/db');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 const app = express();
@@ -26,6 +28,9 @@ app.use('/api/expenses', expenseRoutes);
 app.use('/api/suppliers', supplierRoutes);
 app.use('/api/equipment', equipmentRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/employees', employeeRoutes);
+app.use('/api/clients', clientRoutes);
+app.use('/api/contractors', contractorRoutes);
 app.use('/api', v1Routes);
 app.use('/api/v1', v1Routes);
 
@@ -38,9 +43,4 @@ app.use(notFoundHandler);
 app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
-db.ensureCompatibilityColumns()
-    .then(() => app.listen(PORT, () => console.log(`Server running on port ${PORT}`)))
-    .catch((error) => {
-        console.error('Unable to initialize database compatibility columns:', error);
-        process.exitCode = 1;
-    });
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

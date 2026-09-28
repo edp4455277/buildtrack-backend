@@ -31,7 +31,10 @@ function success(res, data, statusCode = 200) {
 }
 
 function failure(res, error, statusCode = 500) {
-    return res.status(statusCode).json({ status: 'error', message: error.message });
+    const message = error.message || (error.code === 'ECONNREFUSED'
+        ? 'Database connection failed'
+        : 'The request could not be completed');
+    return res.status(statusCode).json({ status: 'error', message });
 }
 
 module.exports = { nextId, releaseIdLocks, value, success, failure };

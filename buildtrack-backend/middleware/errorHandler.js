@@ -11,7 +11,7 @@ function errorHandler(error, req, res, next) {
 
     const status = error.status || (error.code === 'ER_DUP_ENTRY' ? 409 : 500);
     res.status(status).json({
-        error: error.message || 'Internal server error',
+        error: error.message || (error.code === 'ECONNREFUSED' ? 'Database connection failed' : 'Internal server error'),
     });
 }
 
