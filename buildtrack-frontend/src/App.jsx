@@ -20,7 +20,7 @@ function App() {
     setPath(nextPath);
   };
 
-  if (path === '/dashboard') return <BuildTrackApp />;
+  if (path === '/dashboard' && localStorage.getItem('token')) return <BuildTrackApp />;
   if (path !== '/') {
     window.history.replaceState({}, '', '/');
   }
