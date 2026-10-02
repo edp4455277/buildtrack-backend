@@ -67,10 +67,10 @@ function Login({ onLogin }) {
             {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
             <button
               type="submit"
-              disabled={loading} 
-              className="flex w-full items-center justify-center gap-2 rounded-md bg-[#1d6d78] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#165761] focus:outline-none focus:ring-2 focus:ring-[#1d6d78] focus:ring-offset-2"
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-[#1d6d78] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#165761] focus:outline-none focus:ring-2 focus:ring-[#1d6d78] focus:ring-offset-2 disabled:opacity-60"
             >
-              Log In <ArrowRight size={17} />
+              {loading ? 'Logging in...' : 'Log In'} <ArrowRight size={17} />
             </button>
           </form>
         </section>
