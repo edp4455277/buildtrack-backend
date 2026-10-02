@@ -1,9 +1,24 @@
+import { useState } from 'react';
+import { login, apiError } from '../services/api';
 import { ArrowRight, Building2 } from 'lucide-react';
 
 function Login({ onLogin }) {
-  const submit = (event) => {
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const submit = async (event) => {
     event.preventDefault();
-    onLogin();
+    const form = new FormData(event.currentTarget);
+    setError('');
+    setLoading(true);
+    try {
+      await login(form.get('username'), form.get('password'));
+      onLogin();
+    } catch (err) {
+      setError(apiError(err));
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -49,8 +64,10 @@ function Login({ onLogin }) {
                 className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-3 font-normal outline-none transition focus:border-[#1d6d78] focus:ring-2 focus:ring-[#1d6d78]/20"
               />
             </label>
+            {error && <p className="text-sm font-semibold text-red-600">{error}</p>}
             <button
               type="submit"
+              disabled={loading} 
               className="flex w-full items-center justify-center gap-2 rounded-md bg-[#1d6d78] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#165761] focus:outline-none focus:ring-2 focus:ring-[#1d6d78] focus:ring-offset-2"
             >
               Log In <ArrowRight size={17} />
