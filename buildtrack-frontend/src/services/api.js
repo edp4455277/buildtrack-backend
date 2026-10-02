@@ -1,7 +1,14 @@
 export const BASE_URL = 'http://localhost:3000/api';
+export const getToken = () => localStorage.getItem('token');
+export const logout = () => {
+  localStorage.removeItem('token');
+  window.location.href = '/';
+};
 
 async function request(path, { method = 'GET', data, signal } = {}) {
   const options = { method, signal, headers: {} };
+  const token = getToken();
+  if (token) options.headers.Authorization = `Bearer ${token}`;
   if (data !== undefined) {
     options.headers['Content-Type'] = 'application/json';
     options.body = JSON.stringify(data);
@@ -21,7 +28,7 @@ async function request(path, { method = 'GET', data, signal } = {}) {
   } catch {
     payload = null;
   }
-
+if (response.status === 401 && path !== '/auth/login') logout();
   if (!response.ok || payload?.status === 'error') {
     const error = new Error(payload?.message || payload?.error || `Request failed with status ${response.status}`);
     error.status = response.status;
@@ -61,6 +68,15 @@ export function getSuppliers() { return request('/suppliers'); }
 export function createSupplier(data) { return request('/suppliers', { method: 'POST', data }); }
 export function updateSupplier(id, data) { return request(`/suppliers/${id}`, { method: 'PUT', data }); }
 export function deleteSupplier(id) { return request(`/suppliers/${id}`, { method: 'DELETE' }); }
+
+export async function login(email, password) {
+  const result = await request('/auth/login', {
+    method: 'POST',
+    data: { email, password },
+  });
+  localStorage.setItem('token', result.token);
+  return result;
+}
 
 export function getEmployees() { return request('/employees'); }
 export function createEmployee(data) { return request('/employees', { method: 'POST', data }); }
