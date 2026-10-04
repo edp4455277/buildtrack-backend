@@ -13,7 +13,8 @@ const clientRoutes = require('./routes/clients');
 const contractorRoutes = require('./routes/contractors');
 const v1Routes = require('./routes/v1');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
-
+const authRoutes = require('./routes/auth');
+const requireAuth = require('./middleware/auth');
 const app = express();
 
 // Middleware
@@ -23,16 +24,17 @@ app.use(cors({
 app.use(express.json());
 
 // API Routes
-app.use('/api/projects', projectRoutes);
-app.use('/api/expenses', expenseRoutes);
-app.use('/api/suppliers', supplierRoutes);
-app.use('/api/equipment', equipmentRoutes);
-app.use('/api/reports', reportRoutes);
-app.use('/api/employees', employeeRoutes);
-app.use('/api/clients', clientRoutes);
-app.use('/api/contractors', contractorRoutes);
-app.use('/api', v1Routes);
-app.use('/api/v1', v1Routes);
+app.use('/api/auth', authRoutes);
+app.use('/api/projects', requireAuth, projectRoutes);
+app.use('/api/expenses', requireAuth, expenseRoutes);
+app.use('/api/suppliers', requireAuth, supplierRoutes);
+app.use('/api/equipment', requireAuth, equipmentRoutes);
+app.use('/api/reports', requireAuth, reportRoutes);
+app.use('/api/employees', requireAuth, employeeRoutes);
+app.use('/api/clients', requireAuth, clientRoutes);
+app.use('/api/contractors', requireAuth, contractorRoutes);
+app.use('/api', requireAuth, v1Routes);
+app.use('/api/v1', requireAuth, v1Routes);
 
 // Health Check Route
 app.get('/', (req, res) => {
