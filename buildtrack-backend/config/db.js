@@ -12,7 +12,9 @@ const pool = mysql.createPool({
     host: process.env.DB_HOST || 'localhost',
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASS || '',
-    database: process.env.DB_NAME || 'BuildTrackDB',
+    database: process.env.DB_NAME || 'buildtrackdb',
+    dateStrings: true,
+    timezone: 'Z',
     waitForConnections: true,
     connectionLimit: 10,
     queueLimit: 0

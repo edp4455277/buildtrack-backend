@@ -13,6 +13,12 @@ async function getDashboard(req, res) {
             WHERE Project_Status = 'Active'
         `);
 
+        const [[completedProjects]] = await db.query(`
+            SELECT COUNT(*) AS total
+            FROM Projects
+            WHERE Project_Status = 'Completed'
+        `);
+
         const [[employees]] = await db.query(`
             SELECT COUNT(*) AS total
             FROM Employees
@@ -59,6 +65,7 @@ async function getDashboard(req, res) {
             data: {
                 total_projects: projects.total,
                 active_projects: activeProjects.total,
+                completed_projects: completedProjects.total,
                 total_employees: employees.total,
                 total_clients: clients.total,
                 total_suppliers: suppliers.total,
@@ -85,21 +92,22 @@ async function getProjectSummary(req, res) {
             SELECT
                 p.Project_ID,
                 p.Project_Name,
+                c.Client_Name,
+                con.Contractor_Name,
+                e.Employee_Name AS Project_Manager_Name,
                 p.Project_Status,
                 p.Project_Budget,
-                COALESCE(SUM(pe.Amount), 0) AS Total_Expenses,
-                (
-                    p.Project_Budget -
-                    COALESCE(SUM(pe.Amount), 0)
-                ) AS Remaining_Budget
+                COALESCE(expenses.Total_Expenses, 0) AS Total_Expenses,
+                p.Project_Budget - COALESCE(expenses.Total_Expenses, 0) AS Remaining_Budget
             FROM Projects p
-            LEFT JOIN Project_Expenses pe
-                ON pe.Project_ID = p.Project_ID
-            GROUP BY
-                p.Project_ID,
-                p.Project_Name,
-                p.Project_Status,
-                p.Project_Budget
+            LEFT JOIN Clients c ON c.Client_ID = p.Client_ID
+            LEFT JOIN Contractors con ON con.Contractor_ID = p.Contractor_ID
+            LEFT JOIN Employees e ON e.Employee_ID = p.Project_Manager_ID
+            LEFT JOIN (
+                SELECT Project_ID, SUM(Amount) AS Total_Expenses
+                FROM Project_Expenses
+                GROUP BY Project_ID
+            ) expenses ON expenses.Project_ID = p.Project_ID
             ORDER BY p.Project_ID
         `);
 
@@ -178,17 +186,27 @@ async function getSupplierActivity(req, res) {
             SELECT
                 s.Supplier_ID,
                 s.Supplier_Name,
-                COUNT(DISTINCT po.Purchase_Order_ID) AS Purchase_Orders,
-                COALESCE(SUM(po.Total_Amount), 0) AS Ordered_Value,
-                COALESCE(SUM(pay.Amount), 0) AS Paid_Value
+                COALESCE(orders.Purchase_Orders, 0) AS Purchase_Orders,
+                COALESCE(orders.Ordered_Value, 0) AS Ordered_Value,
+                COALESCE(deliveries.Deliveries, 0) AS Deliveries,
+                COALESCE(payments.Paid_Value, 0) AS Paid_Value
             FROM Suppliers s
-            LEFT JOIN Purchase_Orders po
-                ON po.Supplier_ID = s.Supplier_ID
-            LEFT JOIN Payments pay
-                ON pay.Supplier_ID = s.Supplier_ID
-            GROUP BY
-                s.Supplier_ID,
-                s.Supplier_Name
+            LEFT JOIN (
+                SELECT Supplier_ID, COUNT(*) AS Purchase_Orders, SUM(Total_Amount) AS Ordered_Value
+                FROM Purchase_Orders
+                GROUP BY Supplier_ID
+            ) orders ON orders.Supplier_ID = s.Supplier_ID
+            LEFT JOIN (
+                SELECT po.Supplier_ID, COUNT(DISTINCT d.Delivery_ID) AS Deliveries
+                FROM Purchase_Orders po
+                LEFT JOIN Deliveries d ON d.Purchase_Order_ID = po.Purchase_Order_ID
+                GROUP BY po.Supplier_ID
+            ) deliveries ON deliveries.Supplier_ID = s.Supplier_ID
+            LEFT JOIN (
+                SELECT Supplier_ID, SUM(Amount) AS Paid_Value
+                FROM Payments
+                GROUP BY Supplier_ID
+            ) payments ON payments.Supplier_ID = s.Supplier_ID
             ORDER BY s.Supplier_ID
         `);
 
@@ -213,15 +231,18 @@ async function getEmployeeProjects(req, res) {
                 e.Employee_ID,
                 e.Employee_Name,
                 e.Job_Title,
-                COUNT(pe.Project_Employee_ID) AS Project_Count
+                pe.Project_Employee_ID,
+                p.Project_ID,
+                p.Project_Name,
+                pe.Role,
+                pe.Status AS Assignment_Status,
+                pe.Assignment_Start_Date,
+                pe.Assignment_End_Date
             FROM Employees e
             LEFT JOIN Project_Employees pe
                 ON pe.Employee_ID = e.Employee_ID
-            GROUP BY
-                e.Employee_ID,
-                e.Employee_Name,
-                e.Job_Title
-            ORDER BY Project_Count DESC
+            LEFT JOIN Projects p ON p.Project_ID = pe.Project_ID
+            ORDER BY e.Employee_Name, p.Project_Name
         `);
 
         res.json({

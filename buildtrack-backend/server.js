@@ -1,5 +1,6 @@
 const express = require('express');
 const cors = require('cors');
+const db = require('./config/db');
 require('dotenv').config();
 
 // ROUTE IMPORTS
@@ -121,10 +122,18 @@ app.use(errorHandler);
 
 const PORT = process.env.PORT || 3000;
 
-app.listen(PORT, () => {
-    console.log('       BUILDTRACK MANAGEMENT API      ');
-    console.log(`Server running on port ${PORT}`);
-    console.log(`URL: http://localhost:${PORT}`);
-    console.log(`Database: ${process.env.DB_NAME || 'buildtrackdb'}`);
-});
+(async () => {
+    try {
+        await db.ensureCompatibilityColumns();
+    } catch (error) {
+        console.error('Compatibility check failed:', error.message);
+    }
+
+    app.listen(PORT, () => {
+        console.log('       BUILDTRACK MANAGEMENT API      ');
+        console.log(`Server running on port ${PORT}`);
+        console.log(`URL: http://localhost:${PORT}`);
+        console.log(`Database: ${process.env.DB_NAME || 'buildtrackdb'}`);
+    });
+})();
 

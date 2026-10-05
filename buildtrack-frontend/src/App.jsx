@@ -7,12 +7,18 @@ function currentPath() {
 }
 
 function App() {
-  const [path, setPath] = useState(currentPath);
+  const [path, setPath] = useState(currentPath());
 
   useEffect(() => {
-    const handlePopState = () => setPath(currentPath());
+    const handlePopState = () => {
+      setPath(currentPath());
+    };
+
     window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
+
+    return () => {
+      window.removeEventListener('popstate', handlePopState);
+    };
   }, []);
 
   const navigate = (nextPath) => {
@@ -20,11 +26,21 @@ function App() {
     setPath(nextPath);
   };
 
-  if (path === '/dashboard' && localStorage.getItem('token')) return <BuildTrackApp />;
+  const token = localStorage.getItem('token');
+
+  if (path === '/dashboard' && token) {
+    return <BuildTrackApp />;
+  }
+
   if (path !== '/') {
     window.history.replaceState({}, '', '/');
   }
-  return <Login onLogin={() => navigate('/dashboard')} />;
+
+  return (
+    <Login
+      onLogin={() => navigate('/dashboard')}
+    />
+  );
 }
 
 export default App;
