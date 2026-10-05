@@ -1,10 +1,10 @@
 -- Active: 1785663082958@@localhost@3306@buildtrackdb
 -- CREATE DATABASE
-DROP DATABASE IF EXISTS BuildTrackDB;
+DROP DATABASE IF EXISTS buildtrackdb;
 
-CREATE DATABASE BuildTrackDB;
+CREATE DATABASE buildtrackdb;
 
-USE BuildTrackDB;
+USE buildtrackdb;
 
 -- CREATE CLIENTS TABLE
 CREATE TABLE Clients (
@@ -37,6 +37,21 @@ CREATE TABLE Employees (
     Address VARCHAR(100),
     Hire_Date DATE,
     INDEX idx_employee_name (Employee_Name)
+);
+
+-- CREATE USERS TABLE
+CREATE TABLE Users (
+    User_ID INT AUTO_INCREMENT PRIMARY KEY,
+    Employee_ID INT NOT NULL UNIQUE,
+    Email VARCHAR(100) NOT NULL UNIQUE,
+    Password_Hash VARCHAR(255) NOT NULL,
+    Role ENUM('Admin','Staff') NOT NULL DEFAULT 'Staff',
+    Is_Active BOOLEAN NOT NULL DEFAULT TRUE,
+
+    FOREIGN KEY (Employee_ID)
+        REFERENCES Employees(Employee_ID)
+        ON DELETE CASCADE
+        ON UPDATE CASCADE
 );
 
 -- CREATE PROJECTS TABLE
@@ -426,6 +441,22 @@ VALUES
 (19,10,5,'2027-01-01',NULL,'Project Manager','Active'),
 (20,10,7,'2027-01-01',NULL,'Procurement Officer','Active');
 
+INSERT INTO Users
+(
+    Employee_ID,
+    Email,
+    Password_Hash,
+    Role,
+    Is_Active
+)
+VALUES
+(
+    1,
+    'astrophiri204@gmail.com',
+    '$2b$10$PRfUCxL.72t73v7S9k0JDeIJpmE8CGlgxVt592GjfbYNDDGUuc7IC',
+    'Admin',
+    TRUE
+);
 -- VIEW PROJECT EXPENDITURE VS BUDGET
 CREATE OR REPLACE VIEW vw_project_expenditure AS
 SELECT
@@ -833,34 +864,29 @@ SELECT
 FROM vw_project_expenditure
 ORDER BY BudgetUsedPercentage DESC;
 
--- DATABASE SECURITY
+
+
+DESCRIBE Users;
+
+SELECT *
+FROM Users;
+
+-- APPLICATION DATABASE USER
+
 CREATE USER IF NOT EXISTS
 'buildtrack_app'@'localhost'
 IDENTIFIED BY 'Astro150018#';
 
-GRANT
-SELECT,
-INSERT,
-UPDATE,
-DELETE
-ON BuildTrackDB.*
+-- Remove old permissions first
+REVOKE ALL PRIVILEGES, GRANT OPTION
+FROM 'buildtrack_app'@'localhost';
+
+-- Give application only the permissions it needs
+GRANT SELECT, INSERT, UPDATE, DELETE
+ON buildtrackdb.*
 TO 'buildtrack_app'@'localhost';
 
 FLUSH PRIVILEGES;
 
-SHOW GRANTS FOR
-'buildtrack_app'@'localhost';
-
-USE BuildTrackDB;
-CREATE TABLE Users (
-    User_ID INT AUTO_INCREMENT PRIMARY KEY,
-    Email VARCHER(100) UNIQUE NOT NULL,
-    PASSWORD_hash VARCHER(255) NOT NULL,
-    ROLE ENUM('Admin','stuff') NOT NULL DEFAULT 'Stuff'
-);
-
-SELECT * FROM Users;
-
-CREATE TABLE BuildTrackDB.Users (User_ID INT AUTO_INCREMENT PRIMARY KEY, Email VARCHAR(100) UNIQUE NOT NULL, Password_hash VARCHAR(255) NOT NULL, Role ENUM('Admin','Staff') NOT NULL DEFAULT 'staff');
-
-SELECT * FROM BuildTrackDB.Users;
+-- Check permissions
+SHOW GRANTS FOR 'buildtrack_app'@'localhost';

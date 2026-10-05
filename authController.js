@@ -10,19 +10,22 @@ async function login(req, res) {
             return failure(res, { message: 'Email and password are required' }, 400);
         }
 
-        const [rows] = await db.query('SELECT * FROM Users WHERE Email = ?', [email]);
+        const [rows] = await db.query(
+            'SELECT User_ID AS id, Email AS email, Password_Hash AS hash, Role AS role FROM Users WHERE Email = ?',
+            [email]
+        );
         const user = rows[0];
-        const ok = user && await bcrypt.compare(password, user.Password_Hash);
+        const ok = user && await bcrypt.compare(password, user.hash);
         if (!ok) {
             return failure(res, { message: 'Invalid email or password' }, 401);
         }
 
         const token = jwt.sign(
-            { id: user.User_ID, role: user.Role },
+            { id: user.id, role: user.role },
             process.env.JWT_SECRET,
             { expiresIn: '8h' }
         );
-        return success(res, { token, user: { email: user.Email, role: user.Role } });
+        return success(res, { token, user: { email: user.email, role: user.role } });
     } catch (error) {
         return failure(res, error);
     }
