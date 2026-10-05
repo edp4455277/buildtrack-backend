@@ -1,199 +1,215 @@
 const db = require('../config/db');
-const { nextId, releaseIdLocks, value, success, failure } = require('./dbHelpers');
 
 async function getSuppliers(req, res) {
     try {
         const [rows] = await db.query(`
-            SELECT Supplier_ID, Supplier_Name, Phone_Number, Email, Address
-            FROM Suppliers
-            ORDER BY Supplier_ID
+            SELECT
+                s.*,
+                COALESCE(SUM(p.Amount), 0) AS Total_Paid
+            FROM Suppliers s
+            LEFT JOIN Payments p
+                ON p.Supplier_ID = s.Supplier_ID
+            GROUP BY s.Supplier_ID
+            ORDER BY s.Supplier_ID
         `);
-        return success(res, rows);
+
+        res.json({ success: true, data: rows });
     } catch (error) {
-        return failure(res, error);
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve suppliers.'
+        });
+    }
+}
+
+async function getSupplier(req, res) {
+    try {
+        const [supplierRows] = await db.query(`
+            SELECT *
+            FROM Suppliers
+            WHERE Supplier_ID = ?
+        `, [req.params.id]);
+
+        if (!supplierRows.length) {
+            return res.status(404).json({
+                success: false,
+                message: 'Supplier not found.'
+            });
+        }
+
+        const [orders] = await db.query(`
+            SELECT
+                po.Purchase_Order_ID,
+                po.Project_ID,
+                p.Project_Name,
+                po.Order_Date,
+                po.Expected_Delivery_Date,
+                po.Status,
+                po.Total_Amount
+            FROM Purchase_Orders po
+            LEFT JOIN Projects p
+                ON p.Project_ID = po.Project_ID
+            WHERE po.Supplier_ID = ?
+            ORDER BY po.Purchase_Order_ID
+        `, [req.params.id]);
+
+        const [payments] = await db.query(`
+            SELECT *
+            FROM Payments
+            WHERE Supplier_ID = ?
+            ORDER BY Payment_Date DESC
+        `, [req.params.id]);
+
+        res.json({
+            success: true,
+            data: {
+                ...supplierRows[0],
+                purchase_orders: orders,
+                payments
+            }
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve supplier.'
+        });
     }
 }
 
 async function createSupplier(req, res) {
-    let connection;
-    let transactionStarted = false;
-    const locks = [];
-
     try {
-        const body = req.body || {};
-        const supplierName = value(body, 'Supplier_Name', 'supplier_name', 'name');
-        if (!supplierName) {
-            return failure(res, { message: 'Supplier_Name is required' }, 400);
+        const {
+            Supplier_Name,
+            Phone_Number,
+            Email,
+            Address
+        } = req.body;
+
+        if (!Supplier_Name) {
+            return res.status(400).json({
+                success: false,
+                message: 'Supplier_Name is required.'
+            });
         }
 
-        connection = await db.getConnection();
-        await connection.beginTransaction();
-        transactionStarted = true;
-        const generated = await nextId(connection, 'Suppliers', 'Supplier_ID');
-        locks.push(generated.lockName);
-        await connection.query(`
-            INSERT INTO Suppliers (Supplier_ID, Supplier_Name, Phone_Number, Email, Address)
+        const [[row]] = await db.query(`
+            SELECT COALESCE(MAX(Supplier_ID), 0) + 1 AS nextId
+            FROM Suppliers
+        `);
+
+        await db.query(`
+            INSERT INTO Suppliers
+            (Supplier_ID, Supplier_Name, Phone_Number, Email, Address)
             VALUES (?, ?, ?, ?, ?)
         `, [
-            generated.id,
-            supplierName,
-            value(body, 'Phone_Number', 'phone_number', 'Contact_Phone', 'contact_phone') ?? null,
-            value(body, 'Email', 'email') ?? null,
-            value(body, 'Address', 'address') ?? null,
+            row.nextId,
+            Supplier_Name,
+            Phone_Number || null,
+            Email || null,
+            Address || null
         ]);
-        await connection.commit();
-        transactionStarted = false;
-        return success(res, { Supplier_ID: generated.id }, 201);
+
+        res.status(201).json({
+            success: true,
+            message: 'Supplier created successfully.',
+            Supplier_ID: row.nextId
+        });
     } catch (error) {
-        if (transactionStarted) await connection.rollback();
-        return failure(res, error, error.code === 'ER_DUP_ENTRY' ? 409 : 500);
-    } finally {
-        if (connection) {
-            try { await releaseIdLocks(connection, locks); } finally { connection.release(); }
+        console.error(error);
+
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({
+                success: false,
+                message: 'Supplier email already exists.'
+            });
         }
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create supplier.'
+        });
     }
 }
 
 async function updateSupplier(req, res) {
-    const fields = [
-        ['Supplier_Name', ['Supplier_Name', 'supplier_name', 'name']],
-        ['Phone_Number', ['Phone_Number', 'phone_number', 'phone']],
-        ['Email', ['Email', 'email']],
-        ['Address', ['Address', 'address']],
-    ];
-
     try {
-        const body = req.body || {};
-        const updates = [];
-        const params = [];
-        for (const [column, keys] of fields) {
-            const fieldValue = value(body, ...keys);
-            if (fieldValue !== undefined) {
-                updates.push(`${column} = ?`);
-                params.push(fieldValue);
-            }
-        }
-        if (!updates.length) return failure(res, { message: 'At least one supplier field is required' }, 400);
+        const {
+            Supplier_Name,
+            Phone_Number,
+            Email,
+            Address
+        } = req.body;
 
-        params.push(req.params.id);
-        const [result] = await db.query(`UPDATE Suppliers SET ${updates.join(', ')} WHERE Supplier_ID = ?`, params);
+        const [result] = await db.query(`
+            UPDATE Suppliers
+            SET
+                Supplier_Name = ?,
+                Phone_Number = ?,
+                Email = ?,
+                Address = ?
+            WHERE Supplier_ID = ?
+        `, [
+            Supplier_Name,
+            Phone_Number || null,
+            Email || null,
+            Address || null,
+            req.params.id
+        ]);
+
         if (!result.affectedRows) {
-            const [existing] = await db.query('SELECT Supplier_ID FROM Suppliers WHERE Supplier_ID = ?', [req.params.id]);
-            if (!existing.length) return failure(res, { message: 'Supplier not found' }, 404);
+            return res.status(404).json({
+                success: false,
+                message: 'Supplier not found.'
+            });
         }
-        const [rows] = await db.query('SELECT * FROM Suppliers WHERE Supplier_ID = ?', [req.params.id]);
-        return success(res, rows[0]);
+
+        res.json({
+            success: true,
+            message: 'Supplier updated successfully.'
+        });
     } catch (error) {
-        return failure(res, error, error.code === 'ER_DUP_ENTRY' ? 409 : 500);
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update supplier.'
+        });
     }
 }
 
 async function deleteSupplier(req, res) {
     try {
-        const [result] = await db.query('DELETE FROM Suppliers WHERE Supplier_ID = ?', [req.params.id]);
-        if (!result.affectedRows) return failure(res, { message: 'Supplier not found' }, 404);
-        return success(res, { Supplier_ID: Number(req.params.id) });
+        const [result] = await db.query(`
+            DELETE FROM Suppliers
+            WHERE Supplier_ID = ?
+        `, [req.params.id]);
+
+        if (!result.affectedRows) {
+            return res.status(404).json({
+                success: false,
+                message: 'Supplier not found.'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Supplier deleted successfully.'
+        });
     } catch (error) {
-        return failure(res, error, error.code === 'ER_ROW_IS_REFERENCED_2' ? 409 : 500);
+        console.error(error);
+
+        res.status(409).json({
+            success: false,
+            message: 'Cannot delete supplier because it is linked to purchase orders or payments.'
+        });
     }
 }
 
-async function createPurchaseOrder(req, res) {
-    let connection;
-    let transactionStarted = false;
-    const locks = [];
-
-    try {
-        const body = req.body || {};
-        const projectId = value(body, 'Project_ID', 'project_id');
-        const supplierId = value(body, 'Supplier_ID', 'supplier_id');
-        const items = body.items;
-        if (!projectId || !supplierId || !Array.isArray(items) || items.length === 0) {
-            return failure(res, { message: 'Project_ID, Supplier_ID, and at least one item are required' }, 400);
-        }
-
-        connection = await db.getConnection();
-        await connection.beginTransaction();
-        transactionStarted = true;
-
-        const orderId = await nextId(connection, 'Purchase_Orders', 'Purchase_Order_ID');
-        locks.push(orderId.lockName);
-        const itemId = await nextId(connection, 'Purchase_Order_Items', 'Purchase_Order_Item');
-        locks.push(itemId.lockName);
-
-        const preparedItems = [];
-        let totalAmount = 0;
-        for (let index = 0; index < items.length; index += 1) {
-            const item = items[index] || {};
-            const materialId = value(item, 'Material_ID', 'material_id');
-            const quantity = Number(value(item, 'Quantity', 'quantity'));
-            let unitPriceValue = value(item, 'Unit_Price', 'unit_price');
-            if (!materialId || !Number.isFinite(quantity) || quantity <= 0) {
-                throw Object.assign(new Error(`Item ${index + 1} requires a Material_ID and positive Quantity`), { statusCode: 400 });
-            }
-            if (unitPriceValue === undefined) {
-                const [materials] = await connection.query(
-                    'SELECT Unit_Price FROM Materials WHERE Material_ID = ?',
-                    [materialId]
-                );
-                if (!materials.length) {
-                    throw Object.assign(new Error(`Material ${materialId} not found`), { statusCode: 400 });
-                }
-                unitPriceValue = materials[0].Unit_Price;
-            }
-            const unitPrice = Number(unitPriceValue);
-            if (!Number.isFinite(unitPrice) || unitPrice < 0) {
-                throw Object.assign(new Error(`Item ${index + 1} has an invalid Unit_Price`), { statusCode: 400 });
-            }
-            totalAmount += quantity * unitPrice;
-            preparedItems.push({ materialId, quantity, unitPrice, itemId: itemId.id + index });
-        }
-
-        const status = value(body, 'Status', 'status') || 'Draft';
-        await connection.query(`
-            INSERT INTO Purchase_Orders (
-                Purchase_Order_ID, Project_ID, Supplier_ID, Order_Date,
-                Expected_Delivery_Date, Status, Total_Amount
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
-        `, [
-            orderId.id,
-            projectId,
-            supplierId,
-            value(body, 'Order_Date', 'order_date') ?? new Date(),
-            value(body, 'Expected_Delivery_Date', 'expected_delivery_date') ?? null,
-            status,
-            totalAmount,
-        ]);
-
-        for (const item of preparedItems) {
-            await connection.query(`
-                INSERT INTO Purchase_Order_Items (
-                    Purchase_Order_Item, Purchase_Order_ID, Material_ID, Quantity, Unit_Price
-                ) VALUES (?, ?, ?, ?, ?)
-            `, [item.itemId, orderId.id, item.materialId, item.quantity, item.unitPrice]);
-        }
-
-        await connection.commit();
-        transactionStarted = false;
-        return success(res, {
-            Purchase_Order_ID: orderId.id,
-            Project_ID: projectId,
-            Supplier_ID: supplierId,
-            Order_Date: value(body, 'Order_Date', 'order_date') ?? new Date(),
-            Expected_Delivery_Date: value(body, 'Expected_Delivery_Date', 'expected_delivery_date') ?? null,
-            Status: status,
-            Total_Amount: totalAmount,
-            items: preparedItems.map(({ itemId: id, ...item }) => ({ Purchase_Order_Item: id, ...item })),
-        }, 201);
-    } catch (error) {
-        if (transactionStarted) await connection.rollback();
-        const statusCode = error.statusCode || (error.code === 'ER_DUP_ENTRY' ? 409 : 500);
-        return failure(res, error, statusCode);
-    } finally {
-        if (connection) {
-            try { await releaseIdLocks(connection, locks); } finally { connection.release(); }
-        }
-    }
-}
-
-module.exports = { getSuppliers, createSupplier, updateSupplier, deleteSupplier, createPurchaseOrder };
+module.exports = {
+    getSuppliers,
+    getSupplier,
+    createSupplier,
+    updateSupplier,
+    deleteSupplier
+};

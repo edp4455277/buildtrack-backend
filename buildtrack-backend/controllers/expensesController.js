@@ -1,121 +1,224 @@
 const db = require('../config/db');
-const { nextId, releaseIdLocks, value, success, failure } = require('./dbHelpers');
-
-function expenseCategory(category) {
-    return { Labor: 'Labour', Misc: 'Other' }[category] || category;
-}
 
 async function getExpenses(req, res) {
     try {
         const [rows] = await db.query(`
-            SELECT e.Expense_ID, e.Project_ID, p.Project_Name, e.Expense_Date,
-                   e.Expense_Category, e.Description, e.Amount
-            FROM Project_Expenses e
-            LEFT JOIN Projects p ON p.Project_ID = e.Project_ID
-            ORDER BY e.Expense_Date DESC, e.Expense_ID DESC
+            SELECT
+                pe.Expense_ID,
+                pe.Project_ID,
+                p.Project_Name,
+                pe.Expense_Date,
+                pe.Expense_Category,
+                pe.Description,
+                pe.Amount
+            FROM Project_Expenses pe
+            LEFT JOIN Projects p
+                ON p.Project_ID = pe.Project_ID
+            ORDER BY pe.Expense_ID DESC
         `);
-        return success(res, rows);
+
+        res.json({
+            success: true,
+            data: rows
+        });
     } catch (error) {
-        return failure(res, error);
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve expenses.'
+        });
+    }
+}
+
+async function getExpense(req, res) {
+    try {
+        const [rows] = await db.query(`
+            SELECT
+                pe.*,
+                p.Project_Name
+            FROM Project_Expenses pe
+            LEFT JOIN Projects p
+                ON p.Project_ID = pe.Project_ID
+            WHERE pe.Expense_ID = ?
+        `, [req.params.id]);
+
+        if (!rows.length) {
+            return res.status(404).json({
+                success: false,
+                message: 'Expense not found.'
+            });
+        }
+
+        res.json({
+            success: true,
+            data: rows[0]
+        });
+    } catch (error) {
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve expense.'
+        });
     }
 }
 
 async function createExpense(req, res) {
-    let connection;
-    let transactionStarted = false;
-    const locks = [];
-
     try {
-        const body = req.body || {};
-        const projectId = value(body, 'Project_ID', 'project_id');
-        const category = value(body, 'Expense_Category', 'expense_category', 'category');
-        const amount = Number(value(body, 'Amount', 'amount'));
-        if (!projectId || !category || !Number.isFinite(amount) || amount < 0) {
-            return failure(res, { message: 'Project_ID, Expense_Category, and a non-negative Amount are required' }, 400);
+        const {
+            Project_ID,
+            Expense_Date,
+            Expense_Category,
+            Description,
+            Amount
+        } = req.body;
+
+        if (!Project_ID || !Expense_Category || Amount === undefined) {
+            return res.status(400).json({
+                success: false,
+                message: 'Project_ID, Expense_Category and Amount are required.'
+            });
         }
 
-        connection = await db.getConnection();
-        await connection.beginTransaction();
-        transactionStarted = true;
-        const generated = await nextId(connection, 'Project_Expenses', 'Expense_ID');
-        locks.push(generated.lockName);
-        await connection.query(`
-            INSERT INTO Project_Expenses (
-                Expense_ID, Project_ID, Expense_Date, Expense_Category, Description, Amount
-            ) VALUES (?, ?, ?, ?, ?, ?)
+        const [result] = await db.query(`
+            INSERT INTO Project_Expenses
+            (
+                Project_ID,
+                Expense_Date,
+                Expense_Category,
+                Description,
+                Amount
+            )
+            VALUES (?, ?, ?, ?, ?)
         `, [
-            generated.id,
-            projectId,
-            value(body, 'Expense_Date', 'expense_date') ?? new Date(),
-            expenseCategory(category),
-            value(body, 'Description', 'description') ?? null,
-            amount,
+            Project_ID,
+            Expense_Date || null,
+            Expense_Category,
+            Description || null,
+            Amount
         ]);
-        await connection.commit();
-        transactionStarted = false;
-        return success(res, { Expense_ID: generated.id }, 201);
+
+        res.status(201).json({
+            success: true,
+            message: 'Expense created successfully.',
+            Expense_ID: result.insertId
+        });
     } catch (error) {
-        if (transactionStarted) await connection.rollback();
-        return failure(res, error, error.code === 'ER_DUP_ENTRY' ? 409 : 500);
-    } finally {
-        if (connection) {
-            try { await releaseIdLocks(connection, locks); } finally { connection.release(); }
-        }
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create expense.'
+        });
     }
 }
 
 async function updateExpense(req, res) {
-    const fields = [
-        ['Project_ID', ['Project_ID', 'project_id']],
-        ['Expense_Date', ['Expense_Date', 'expense_date']],
-        ['Expense_Category', ['Expense_Category', 'expense_category', 'category']],
-        ['Description', ['Description', 'description']],
-        ['Amount', ['Amount', 'amount']],
-    ];
-
     try {
-        const body = req.body || {};
-        const updates = [];
-        const params = [];
-        for (const [column, keys] of fields) {
-            const fieldValue = value(body, ...keys);
-            if (fieldValue !== undefined) {
-                updates.push(`${column} = ?`);
-                params.push(column === 'Expense_Category' ? expenseCategory(fieldValue) : fieldValue);
-            }
-        }
-        if (!updates.length) return failure(res, { message: 'At least one expense field is required' }, 400);
+        const {
+            Project_ID,
+            Expense_Date,
+            Expense_Category,
+            Description,
+            Amount
+        } = req.body;
 
-        params.push(req.params.id);
-        const [result] = await db.query(
-            `UPDATE Project_Expenses SET ${updates.join(', ')} WHERE Expense_ID = ?`,
-            params
-        );
+        const [result] = await db.query(`
+            UPDATE Project_Expenses
+            SET
+                Project_ID = ?,
+                Expense_Date = ?,
+                Expense_Category = ?,
+                Description = ?,
+                Amount = ?
+            WHERE Expense_ID = ?
+        `, [
+            Project_ID,
+            Expense_Date || null,
+            Expense_Category,
+            Description || null,
+            Amount,
+            req.params.id
+        ]);
+
         if (!result.affectedRows) {
-            const [existing] = await db.query('SELECT Expense_ID FROM Project_Expenses WHERE Expense_ID = ?', [req.params.id]);
-            if (!existing.length) return failure(res, { message: 'Expense not found' }, 404);
+            return res.status(404).json({
+                success: false,
+                message: 'Expense not found.'
+            });
         }
-        const [rows] = await db.query(`
-            SELECT e.Expense_ID, e.Project_ID, p.Project_Name, e.Expense_Date,
-                   e.Expense_Category, e.Description, e.Amount
-            FROM Project_Expenses e
-            LEFT JOIN Projects p ON p.Project_ID = e.Project_ID
-            WHERE e.Expense_ID = ?
-        `, [req.params.id]);
-        return success(res, rows[0]);
+
+        res.json({
+            success: true,
+            message: 'Expense updated successfully.'
+        });
     } catch (error) {
-        return failure(res, error, error.code === 'ER_ROW_IS_REFERENCED_2' ? 409 : 500);
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update expense.'
+        });
     }
 }
 
 async function deleteExpense(req, res) {
     try {
-        const [result] = await db.query('DELETE FROM Project_Expenses WHERE Expense_ID = ?', [req.params.id]);
-        if (!result.affectedRows) return failure(res, { message: 'Expense not found' }, 404);
-        return success(res, { Expense_ID: Number(req.params.id) });
+        const [result] = await db.query(`
+            DELETE FROM Project_Expenses
+            WHERE Expense_ID = ?
+        `, [req.params.id]);
+
+        if (!result.affectedRows) {
+            return res.status(404).json({
+                success: false,
+                message: 'Expense not found.'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Expense deleted successfully.'
+        });
     } catch (error) {
-        return failure(res, error, error.code === 'ER_ROW_IS_REFERENCED_2' ? 409 : 500);
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to delete expense.'
+        });
     }
 }
 
-module.exports = { getExpenses, createExpense, updateExpense, deleteExpense };
+async function getProjectExpenses(req, res) {
+    try {
+        const [rows] = await db.query(`
+            SELECT *
+            FROM Project_Expenses
+            WHERE Project_ID = ?
+            ORDER BY Expense_Date DESC, Expense_ID DESC
+        `, [req.params.projectId]);
+
+        res.json({
+            success: true,
+            data: rows
+        });
+    } catch (error) {
+        console.error(error);
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve project expenses.'
+        });
+    }
+}
+
+module.exports = {
+    getExpenses,
+    getExpense,
+    createExpense,
+    updateExpense,
+    deleteExpense,
+    getProjectExpenses
+};

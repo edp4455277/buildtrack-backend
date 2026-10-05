@@ -1,114 +1,220 @@
 const db = require('../config/db');
-const { nextId, releaseIdLocks, value, success, failure } = require('./dbHelpers');
 
 async function getEmployees(req, res) {
     try {
-        const [employees] = await db.query('SELECT * FROM Employees');
-        return success(res, employees);
+        const [rows] = await db.query(`
+            SELECT *
+            FROM Employees
+            ORDER BY Employee_ID
+        `);
+
+        res.json({ success: true, data: rows });
     } catch (error) {
-        console.error('Error fetching employees:', error);
-        return failure(res, error);
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve employees.'
+        });
+    }
+}
+
+async function getEmployee(req, res) {
+    try {
+        const [employeeRows] = await db.query(`
+            SELECT *
+            FROM Employees
+            WHERE Employee_ID = ?
+        `, [req.params.id]);
+
+        if (!employeeRows.length) {
+            return res.status(404).json({
+                success: false,
+                message: 'Employee not found.'
+            });
+        }
+
+        const [projects] = await db.query(`
+            SELECT
+                pe.Project_Employee_ID,
+                pe.Project_ID,
+                p.Project_Name,
+                pe.Assignment_Start_Date,
+                pe.Assignment_End_Date,
+                pe.Role,
+                pe.Status
+            FROM Project_Employees pe
+            INNER JOIN Projects p
+                ON p.Project_ID = pe.Project_ID
+            WHERE pe.Employee_ID = ?
+            ORDER BY pe.Project_Employee_ID
+        `, [req.params.id]);
+
+        res.json({
+            success: true,
+            data: {
+                ...employeeRows[0],
+                projects
+            }
+        });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to retrieve employee.'
+        });
     }
 }
 
 async function createEmployee(req, res) {
-    let connection;
-    let transactionStarted = false;
-    const locks = [];
-
     try {
-        const body = req.body || {};
-        const employeeName = value(body, 'Employee_Name', 'employee_name', 'name');
-        if (!employeeName) {
-            const error = new Error('Employee_Name is required');
-            error.statusCode = 400;
-            throw error;
+        const {
+            Employee_Name,
+            Phone_Number,
+            Email,
+            Job_Title,
+            Address,
+            Hire_Date
+        } = req.body;
+
+        if (!Employee_Name) {
+            return res.status(400).json({
+                success: false,
+                message: 'Employee_Name is required.'
+            });
         }
 
-        connection = await db.getConnection();
-        await connection.beginTransaction();
-        transactionStarted = true;
-        const generated = await nextId(connection, 'Employees', 'Employee_ID');
-        locks.push(generated.lockName);
+        const [[row]] = await db.query(`
+            SELECT COALESCE(MAX(Employee_ID), 0) + 1 AS nextId
+            FROM Employees
+        `);
 
-        await connection.query(`
-            INSERT INTO Employees (
-                Employee_ID, Employee_Name, Phone_Number, Email, Job_Title, Address, Hire_Date
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        await db.query(`
+            INSERT INTO Employees
+            (
+                Employee_ID,
+                Employee_Name,
+                Phone_Number,
+                Email,
+                Job_Title,
+                Address,
+                Hire_Date
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
         `, [
-            generated.id,
-            employeeName,
-            value(body, 'Phone_Number', 'phone_number', 'phone') ?? null,
-            value(body, 'Email', 'email') ?? null,
-            value(body, 'Job_Title', 'job_title', 'role') ?? null,
-            value(body, 'Address', 'address') ?? null,
-            value(body, 'Hire_Date', 'hire_date') ?? null,
+            row.nextId,
+            Employee_Name,
+            Phone_Number || null,
+            Email || null,
+            Job_Title || null,
+            Address || null,
+            Hire_Date || null
         ]);
 
-        const [employees] = await connection.query(
-            'SELECT * FROM Employees WHERE Employee_ID = ?',
-            [generated.id]
-        );
-        await connection.commit();
-        transactionStarted = false;
-        return success(res, employees[0], 201);
+        res.status(201).json({
+            success: true,
+            message: 'Employee created successfully.',
+            Employee_ID: row.nextId
+        });
     } catch (error) {
-        if (transactionStarted) await connection.rollback();
-        console.error('Error creating employee:', error);
-        return failure(res, error, error.statusCode || (error.code === 'ER_DUP_ENTRY' ? 409 : 500));
-    } finally {
-        if (connection) {
-            try { await releaseIdLocks(connection, locks); } finally { connection.release(); }
+        console.error(error);
+
+        if (error.code === 'ER_DUP_ENTRY') {
+            return res.status(409).json({
+                success: false,
+                message: 'An employee with this email already exists.'
+            });
         }
+
+        res.status(500).json({
+            success: false,
+            message: 'Failed to create employee.'
+        });
     }
 }
 
 async function updateEmployee(req, res) {
-    const fields = [
-        ['Employee_Name', ['Employee_Name', 'employee_name', 'name']],
-        ['Phone_Number', ['Phone_Number', 'phone_number', 'phone']],
-        ['Email', ['Email', 'email']],
-        ['Job_Title', ['Job_Title', 'job_title', 'role']],
-        ['Address', ['Address', 'address']],
-        ['Hire_Date', ['Hire_Date', 'hire_date']],
-    ];
-
     try {
-        const body = req.body || {};
-        const updates = [];
-        const params = [];
-        for (const [column, keys] of fields) {
-            const fieldValue = value(body, ...keys);
-            if (fieldValue !== undefined) {
-                updates.push(`${column} = ?`);
-                params.push(fieldValue);
-            }
-        }
-        if (!updates.length) return failure(res, { message: 'At least one employee field is required' }, 400);
+        const {
+            Employee_Name,
+            Phone_Number,
+            Email,
+            Job_Title,
+            Address,
+            Hire_Date
+        } = req.body;
 
-        params.push(req.params.id);
-        const [result] = await db.query(`UPDATE Employees SET ${updates.join(', ')} WHERE Employee_ID = ?`, params);
+        const [result] = await db.query(`
+            UPDATE Employees
+            SET
+                Employee_Name = ?,
+                Phone_Number = ?,
+                Email = ?,
+                Job_Title = ?,
+                Address = ?,
+                Hire_Date = ?
+            WHERE Employee_ID = ?
+        `, [
+            Employee_Name,
+            Phone_Number || null,
+            Email || null,
+            Job_Title || null,
+            Address || null,
+            Hire_Date || null,
+            req.params.id
+        ]);
+
         if (!result.affectedRows) {
-            const [existing] = await db.query('SELECT Employee_ID FROM Employees WHERE Employee_ID = ?', [req.params.id]);
-            if (!existing.length) return failure(res, { message: 'Employee not found' }, 404);
+            return res.status(404).json({
+                success: false,
+                message: 'Employee not found.'
+            });
         }
-        const [rows] = await db.query('SELECT * FROM Employees WHERE Employee_ID = ?', [req.params.id]);
-        return success(res, rows[0]);
+
+        res.json({
+            success: true,
+            message: 'Employee updated successfully.'
+        });
     } catch (error) {
-        console.error('Error updating employee:', error);
-        return failure(res, error, error.code === 'ER_DUP_ENTRY' ? 409 : 500);
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to update employee.'
+        });
     }
 }
 
 async function deleteEmployee(req, res) {
     try {
-        const [result] = await db.query('DELETE FROM Employees WHERE Employee_ID = ?', [req.params.id]);
-        if (!result.affectedRows) return failure(res, { message: 'Employee not found' }, 404);
-        return success(res, { Employee_ID: Number(req.params.id) });
+        const [result] = await db.query(`
+            DELETE FROM Employees
+            WHERE Employee_ID = ?
+        `, [req.params.id]);
+
+        if (!result.affectedRows) {
+            return res.status(404).json({
+                success: false,
+                message: 'Employee not found.'
+            });
+        }
+
+        res.json({
+            success: true,
+            message: 'Employee deleted successfully.'
+        });
     } catch (error) {
-        console.error('Error deleting employee:', error);
-        return failure(res, error, error.code === 'ER_ROW_IS_REFERENCED_2' ? 409 : 500);
+        console.error(error);
+
+        res.status(409).json({
+            success: false,
+            message: 'Cannot delete this employee because they are linked to other records.'
+        });
     }
 }
 
-module.exports = { getEmployees, createEmployee, updateEmployee, deleteEmployee };
+module.exports = {
+    getEmployees,
+    getEmployee,
+    createEmployee,
+    updateEmployee,
+    deleteEmployee
+};
