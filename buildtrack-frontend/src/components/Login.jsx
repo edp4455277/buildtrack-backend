@@ -1,37 +1,11 @@
-import { useState } from 'react';
 import { ArrowRight, Building2 } from 'lucide-react';
-import { login, apiError } from '../services/api';
 
 function Login({ onLogin }) {
-  const [error, setError] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  async function submit(event) {
+  function submit(event) {
     event.preventDefault();
-
-    const form = new FormData(event.currentTarget);
-
-    const email = form.get('email')?.trim();
-    const password = form.get('password');
-
-    setError('');
-
-    if (!email || !password) {
-      setError('Please enter your email and password.');
-      return;
-    }
-
-    try {
-      setLoading(true);
-
-      await login(email, password);
-
-      onLogin();
-    } catch (err) {
-      setError(apiError(err));
-    } finally {
-      setLoading(false);
-    }
+    localStorage.setItem('token', 'mock-jwt-token-xyz123');
+    localStorage.setItem('user', JSON.stringify({ name: 'Admin', role: 'Admin' }));
+    onLogin();
   }
 
   return (
@@ -103,10 +77,9 @@ function Login({ onLogin }) {
 
               <input
                 name="email"
-                type="email"
+                type="text"
                 autoComplete="username"
                 placeholder="Enter your email"
-                required
                 className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-3 font-normal outline-none transition focus:border-[#1d6d78] focus:ring-2 focus:ring-[#1d6d78]/20"
               />
             </label>
@@ -119,27 +92,16 @@ function Login({ onLogin }) {
                 type="password"
                 autoComplete="current-password"
                 placeholder="Enter your password"
-                required
                 className="mt-2 w-full rounded-md border border-slate-300 bg-white px-3 py-3 font-normal outline-none transition focus:border-[#1d6d78] focus:ring-2 focus:ring-[#1d6d78]/20"
               />
             </label>
 
-            {error && (
-              <div className="rounded-md bg-red-50 px-3 py-3 text-sm font-semibold text-red-600">
-                {error}
-              </div>
-            )}
-
             <button
               type="submit"
-              disabled={loading}
-              className="flex w-full items-center justify-center gap-2 rounded-md bg-[#1d6d78] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#165761] disabled:cursor-not-allowed disabled:opacity-60"
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-[#1d6d78] px-4 py-3 text-sm font-bold text-white transition hover:bg-[#165761]"
             >
-              {loading ? 'Logging in...' : 'Log In'}
-
-              {!loading && (
-                <ArrowRight size={17} />
-              )}
+              Log In
+              <ArrowRight size={17} />
             </button>
 
           </form>
